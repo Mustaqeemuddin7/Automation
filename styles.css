@@ -1,0 +1,45 @@
+/* styles.css */
+.main-header {
+    background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
+    padding: 2rem;
+    border-radius: 10px;
+    color: white;
+    text-align: center;
+    margin-bottom: 2rem;
+}
+.feature-card {
+    background: #f8f9fa;
+    padding: 1.5rem;
+    border-radius: 8px;
+    border-left: 4px solid #1e3c72;
+    margin: 1rem 0;
+}
+.success-box {
+    background: #d4edda;
+    border: 1px solid #c3e6cb;
+    border-radius: 5px;
+    padding: 1rem;
+    margin: 1rem 0;
+}
+.institutional-header {
+    background: #1e3c72;
+    color: white;
+    padding: 1rem;
+    text-align: center;
+    border-radius: 5px;
+    margin: 1rem 0;
+}
+.feature-card h4 {
+    margin-bottom: 0.5rem;
+}
+.feature-card p {
+    color: #444444;
+}
+@media (prefers-color-scheme: dark) {
+    .feature-card h4 {
+        color: #000000 !important;
+    }
+    .feature-card p {
+        color: #000000 !important;
+    }
+}
