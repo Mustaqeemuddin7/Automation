@@ -5,6 +5,7 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from io import BytesIO
 import concurrent.futures
 import streamlit as st
+from docx.enum.text import WD_BREAK
 
 def add_logo_and_header(doc, department_name):
     """Add institutional header to document with correct font and sizes"""
@@ -255,8 +256,8 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
         section.left_margin = Inches(0.5)
         section.right_margin = Inches(0.5)
     for idx, student_roll in enumerate(all_students_data):
-        if idx > 0:
-            doc.add_page_break()
+        # if idx > 0:
+        #     doc.add_page_break()
         student_complete_data = get_student_complete_data(student_roll, subjects_data)
         if student_complete_data['subjects']:
             add_logo_and_header(doc, department_name)
