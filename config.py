@@ -4,7 +4,7 @@
 # Streamlit page configuration
 PAGE_CONFIG = {
     "page_title": "LORDS Institute Progress Report System",
-    "page_icon": "🎓",
+    "page_icon": "C:/Users/Mustaqeem Uddin/OneDrive/Documents/PROJECTS/lords_progress_report/assests/logo.png",
     "layout": "wide",
     "initial_sidebar_state": "expanded"
 }

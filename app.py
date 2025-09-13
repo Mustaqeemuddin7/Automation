@@ -18,45 +18,57 @@ with open("styles.css") as f:
 def main():
     st.markdown("""
     <div class="main-header">
-        <h1>🎓 LORDS Institute Enhanced Progress Report System</h1>
+        <h2>🎓 Lords Institute of Engineering and Technology</h2>
+        <h1>Lords Institute Enhanced Progress Report System</h1>
         <p>Comprehensive institutional progress reports with unified format</p>
     </div>
     """, unsafe_allow_html=True)
     
-    with st.sidebar:
+    # Replace sidebar with tabs
+    tabs = st.tabs([
+        "🏛️ Institute Info",
+        "📁 Upload Subject Files",
+        "📊 Preview Data",
+        "📋 Generate Enhanced Reports",
+        "📋 Features",
+        "📥 Sample Data"
+    ])
+
+    with tabs[0]:
         st.markdown("""
-        <div class="institutional-header">
-            <h3>🏛️ LORDS Institute</h3>
-            <p>Engineering & Technology</p>
-        </div>
-        """, unsafe_allow_html=True)
-        st.header("📋 Enhanced Features")
-        st.markdown("""
-        <div class="feature-card">
-            <h4>📄 Comprehensive Reports</h4>
-            <p>Single report per student containing all subjects</p>
-        </div>
-        <div class="feature-card">
-            <h4>📚 Consolidated Document</h4>
-            <p>All student reports in one Word document</p>
-        </div>
-        <div class="feature-card">
-            <h4>📊 Enhanced Analytics</h4>
-            <p>Overall attendance and performance metrics</p>
-        </div>
-        <div class="feature-card">
-            <h4>🚀 Streamlined Process</h4>
-            <p>Efficient generation and distribution</p>
-        </div>
-        <div class="feature-card">
-            <h4>👀 Advanced Previews</h4>
-            <p>HTML and text report previews</p>
+        <div class="tab-content">
+            <h3>🏛️ Lords Institute of Engineering and Technology</h3>
+            <p></p>
         </div>
         """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📁 Upload Subject Files", "📊 Preview Data", "📋 Generate Enhanced Reports", "📥 Sample Data"])
+    with tabs[5]:
+        st.markdown("""
+        <div class="tab-content">
+            <div class="feature-card">
+                <h4>📄 Comprehensive Reports</h4>
+                <p>Single report per student containing all subjects</p>
+            </div>
+            <div class="feature-card">
+                <h4>📚 Consolidated Document</h4>
+                <p>All student reports in one Word document</p>
+            </div>
+            <div class="feature-card">
+                <h4>📊 Enhanced Analytics</h4>
+                <p>Overall attendance and performance metrics</p>
+            </div>
+            <div class="feature-card">
+                <h4>🚀 Streamlined Process</h4>
+                <p>Efficient generation and distribution</p>
+            </div>
+            <div class="feature-card">
+                <h4>👀 Advanced Previews</h4>
+                <p>HTML and text report previews</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    with tab1:
+    with tabs[1]:
         st.header("Upload Subject Excel Files")
         st.info("Upload multiple Excel files - each file name represents a subject (e.g., Mathematics.xlsx, Physics.xlsx)")
         uploaded_files = st.file_uploader(
@@ -73,7 +85,7 @@ def main():
                 st.write(f"{i}. {subject}")
             st.session_state['uploaded_files'] = uploaded_files
 
-    with tab2:
+    with tabs[2]:
         st.header("Data Preview & Validation")
         if 'uploaded_files' in st.session_state:
             with st.spinner("Processing subject files..."):
@@ -106,7 +118,7 @@ def main():
         else:
             st.warning("Please upload subject Excel files in the 'Upload Subject Files' tab first.")
 
-    with tab3:
+    with tabs[3]:
         st.header("🎓 Generate Institutional Progress Reports")
         if 'subjects_data' in st.session_state:
             subjects_data = st.session_state['subjects_data']
@@ -184,13 +196,12 @@ def main():
                             subjects_data,
                             department_name=st.session_state['department_name'],
                             report_date=st.session_state['report_date'],
-                            academic_year=st.session_state['academic_year'],  # NEW: Pass academic year
-                            semester=st.session_state['semester'],            # NEW: Pass semester
+                            academic_year=st.session_state['academic_year'],
+                            semester=st.session_state['semester'],
                             template="Detailed",
                             include_backlog=True,
                             include_notes=True
                         )
-        # ... rest of the code (progress loop, etc.) remains the same
                         student_reports = {}
                         for i, student_roll in enumerate(students_to_process):
                             status_text.text(f"Processing student {student_roll} ({i+1}/{len(students_to_process)})")
@@ -263,7 +274,7 @@ def main():
         else:
             st.warning("Please process your subject data in the 'Preview Data' tab first.")
 
-    with tab4:
+    with tabs[4]:
         st.header("Sample Data & Template")
         st.subheader("📋 Required Excel Format")
         st.markdown("""
@@ -307,9 +318,7 @@ def main():
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: #666; padding: 2rem;">
-        <h4>🏛️ LORDS Institute Progress Report System</h4>
-        <p>Professional institutional report generation with exact format compliance</p>
-        <p><strong>Features:</strong> Subject-wise Processing • Customizable Reports • Word Document Downloads • Parallel Processing</p>
+        <h2>🏛️ Lords Institute of Engineering and Technology</h2>
     </div>
     """, unsafe_allow_html=True)
 
