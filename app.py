@@ -1,6 +1,3 @@
-# app.py
-# Main Streamlit application for the LORDS Institute Progress Report System
-
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -116,12 +113,16 @@ def main():
             all_students = st.session_state['all_students']
             st.info(f"Ready to generate reports for {len(all_students)} students across {len(subjects_data)} subjects")
             
-            # New input fields for department name and report date
+            # Report Configuration
             st.subheader("Report Configuration")
             department_name = st.text_input("Department Name", value="Computer Science", help="Enter the department name to appear in the report")
             report_date = st.date_input("Report Date", value=datetime.now(), help="Select the date to appear in the report")
+            academic_year = st.text_input("Academic Year", value="2024-2025", help="Enter the academic year (e.g., 2024-2025)")
+            semester = st.text_input("Semester", value="B.E- IV Semester", help="Enter the semester (e.g., B.E- IV Semester)")
             st.session_state['department_name'] = department_name
             st.session_state['report_date'] = report_date.strftime('%d.%m.%Y')
+            st.session_state['academic_year'] = academic_year
+            st.session_state['semester'] = semester
 
             st.subheader("✏️ Edit Student Data")
             edit_student = st.selectbox("Select student to edit:", options=[""] + all_students, key="edit_student_select")
@@ -183,10 +184,13 @@ def main():
                             subjects_data,
                             department_name=st.session_state['department_name'],
                             report_date=st.session_state['report_date'],
+                            academic_year=st.session_state['academic_year'],  # NEW: Pass academic year
+                            semester=st.session_state['semester'],            # NEW: Pass semester
                             template="Detailed",
                             include_backlog=True,
                             include_notes=True
                         )
+        # ... rest of the code (progress loop, etc.) remains the same
                         student_reports = {}
                         for i, student_roll in enumerate(students_to_process):
                             status_text.text(f"Processing student {student_roll} ({i+1}/{len(students_to_process)})")
@@ -311,4 +315,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
