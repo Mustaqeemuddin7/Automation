@@ -9,8 +9,8 @@ def create_sample_subject_data():
     subjects_data = {
         'Mathematics': {
             'roll_no': ['16092373013', '16092373014', '16092373015', '16092373016', '16092373017'],
-            'student_name': ['MOHAMMED ZAHID', 'ALICE JOHNSON', 'BOB SMITH', 'CHARLIE BROWN', 'DIANA PRINCE'],
-            'father_name': ['SHAIKH FIOTE SAYYED BAJI', 'ROBERT JOHNSON', 'DAVID SMITH', 'MARK BROWN', 'STEVE PRINCE'],
+            'student_name': ['Steve Rogers', 'ALICE JOHNSON', 'BOB SMITH', 'CHARLIE BROWN', 'DIANA PRINCE'],
+            'father_name': ['Chris Evans', 'ROBERT JOHNSON', 'DAVID SMITH', 'MARK BROWN', 'STEVE PRINCE'],
             'dt_marks': [24, 22, 18, 20, 25],
             'st_marks': [11, 14, 12, 15, 13],
             'at_marks': [10, 12, 8, 11, 14],
@@ -20,8 +20,8 @@ def create_sample_subject_data():
         },
         'Physics': {
             'roll_no': ['16092373013', '16092373014', '16092373015', '16092373016', '16092373017'],
-            'student_name': ['MOHAMMED ZAHID', 'ALICE JOHNSON', 'BOB SMITH', 'CHARLIE BROWN', 'DIANA PRINCE'],
-            'father_name': ['SHAIKH FIOTE SAYYED BAJI', 'ROBERT JOHNSON', 'DAVID SMITH', 'MARK BROWN', 'STEVE PRINCE'],
+            'student_name': ['Steve Rogers', 'ALICE JOHNSON', 'BOB SMITH', 'CHARLIE BROWN', 'DIANA PRINCE'],
+            'father_name': ['Chris Evans', 'ROBERT JOHNSON', 'DAVID SMITH', 'MARK BROWN', 'STEVE PRINCE'],
             'dt_marks': [22, 25, 20, 23, 28],
             'st_marks': [12, 13, 10, 14, 15],
             'at_marks': [9, 11, 8, 12, 13],
@@ -31,8 +31,8 @@ def create_sample_subject_data():
         },
         'Chemistry': {
             'roll_no': ['16092373013', '16092373014', '16092373015', '16092373016', '16092373017'],
-            'student_name': ['MOHAMMED ZAHID', 'ALICE JOHNSON', 'BOB SMITH', 'CHARLIE BROWN', 'DIANA PRINCE'],
-            'father_name': ['SHAIKH FIOTE SAYYED BAJI', 'ROBERT JOHNSON', 'DAVID SMITH', 'MARK BROWN', 'STEVE PRINCE'],
+            'student_name': ['Steve Rogers', 'ALICE JOHNSON', 'BOB SMITH', 'CHARLIE BROWN', 'DIANA PRINCE'],
+            'father_name': ['Chris Evans', 'ROBERT JOHNSON', 'DAVID SMITH', 'MARK BROWN', 'STEVE PRINCE'],
             'dt_marks': [26, 28, 24, 25, 30],
             'st_marks': [13, 15, 11, 14, 16],
             'at_marks': [11, 13, 9, 12, 15],
