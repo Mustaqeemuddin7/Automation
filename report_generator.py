@@ -93,15 +93,41 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
     details_run.font.size = Pt(10)
     subjects = student_complete_data['subjects']
     if subjects:
-        table = doc.add_table(rows=1, cols=8)
+        # Create a two-row header with grouped columns like the reference image
+        table = doc.add_table(rows=2, cols=8)
         table.style = 'Table Grid'
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        headers = ['S.No.', 'Course Title', 'Attendance\n(From 03-02-2025 to 15-04-2025)\nNo. of Classes\nConducted', 'No. of Classes\nAttended', 'CIE-1 Marks\nDT\n(20)', 'ST\n(10)', 'AT\n(10)', 'Total\n(40)']
-        hdr_cells = table.rows[0].cells
-        for i, header in enumerate(headers):
-            if i < len(hdr_cells):
-                hdr_cells[i].text = header
-                for paragraph in hdr_cells[i].paragraphs:
+
+        # Top header row labels
+        top = table.rows[0].cells
+        bottom = table.rows[1].cells
+
+        # Merge S.No. and Course Title vertically
+        table.cell(0, 0).merge(table.cell(1, 0))
+        table.cell(0, 1).merge(table.cell(1, 1))
+        top[0].text = 'S. No.'
+        top[1].text = 'Course Title'
+
+        # Attendance group spanning two columns
+        attendance_top = table.cell(0, 2)
+        attendance_top.merge(table.cell(0, 3))
+        attendance_top.text = 'Attendance\n(From 03-02-2025 to 15-04-2025)'
+        bottom[2].text = 'No. of Classes\nConducted'
+        bottom[3].text = 'No. of Classes\nAttended'
+
+        # CIE-1 Marks group spanning four columns
+        marks_top = table.cell(0, 4)
+        marks_top.merge(table.cell(0, 7))
+        marks_top.text = 'CIE-1 Marks'
+        bottom[4].text = 'DT\n(20)'
+        bottom[5].text = 'ST\n(10)'
+        bottom[6].text = 'AT\n(10)'
+        bottom[7].text = 'Total\n(40)'
+
+        # Style header rows
+        for row in [table.rows[0], table.rows[1]]:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
                     for run in paragraph.runs:
                         run.font.name = 'Times New Roman'
                         run.font.bold = True
@@ -150,7 +176,11 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
         percent_row = table.add_row()
         percent_cells = percent_row.cells
         percent_cells[1].text = "Percentage"
-        percent_cells[3].text = f"{overall_attendance_percent:.2f}%"
+        # Merge attendance columns (Conducted and Attended) into one cell for percentage value
+        percent_row_idx = len(table.rows) - 1
+        merged_attendance_cell = table.cell(percent_row_idx, 2)
+        merged_attendance_cell.merge(table.cell(percent_row_idx, 3))
+        merged_attendance_cell.text = f"{overall_attendance_percent:.2f}%"
         for row in [total_row, percent_row]:
             for cell in row.cells:
                 for paragraph in cell.paragraphs:
@@ -256,8 +286,8 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
         section.left_margin = Inches(0.5)
         section.right_margin = Inches(0.5)
     for idx, student_roll in enumerate(all_students_data):
-        # if idx > 0:
-        #     doc.add_page_break()
+        if idx > 0:
+            doc.add_page_break()
         student_complete_data = get_student_complete_data(student_roll, subjects_data)
         if student_complete_data['subjects']:
             add_logo_and_header(doc, department_name)
@@ -286,15 +316,36 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
             details_run.font.name = 'Times New Roman'
             details_run.font.size = Pt(10)
             subjects = student_complete_data['subjects']
-            table = doc.add_table(rows=1, cols=8)
+            # Two-row grouped header like the reference image
+            table = doc.add_table(rows=2, cols=8)
             table.style = 'Table Grid'
             table.alignment = WD_TABLE_ALIGNMENT.CENTER
-            headers = ['S.No.', 'Course Title', 'Attendance\n(From 03-02-2025 to 15-04-2025)\nNo. of Classes\nConducted', 'No. of Classes\nAttended', 'CIE-1 Marks\nDT\n(20)', 'ST\n(10)', 'AT\n(10)', 'Total\n(40)']
-            hdr_cells = table.rows[0].cells
-            for i, header in enumerate(headers):
-                if i < len(hdr_cells):
-                    hdr_cells[i].text = header
-                    for paragraph in hdr_cells[i].paragraphs:
+
+            top = table.rows[0].cells
+            bottom = table.rows[1].cells
+
+            table.cell(0, 0).merge(table.cell(1, 0))
+            table.cell(0, 1).merge(table.cell(1, 1))
+            top[0].text = 'S. No.'
+            top[1].text = 'Course Title'
+
+            attendance_top = table.cell(0, 2)
+            attendance_top.merge(table.cell(0, 3))
+            attendance_top.text = 'Attendance\n(From 03-02-2025 to 15-04-2025)'
+            bottom[2].text = 'No. of Classes\nConducted'
+            bottom[3].text = 'No. of Classes\nAttended'
+
+            marks_top = table.cell(0, 4)
+            marks_top.merge(table.cell(0, 7))
+            marks_top.text = 'CIE-1 Marks'
+            bottom[4].text = 'DT\n(20)'
+            bottom[5].text = 'ST\n(10)'
+            bottom[6].text = 'AT\n(10)'
+            bottom[7].text = 'Total\n(40)'
+
+            for row in [table.rows[0], table.rows[1]]:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
                         for run in paragraph.runs:
                             run.font.name = 'Times New Roman'
                             run.font.bold = True
@@ -343,7 +394,11 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
             percent_row = table.add_row()
             percent_cells = percent_row.cells
             percent_cells[1].text = "Percentage"
-            percent_cells[3].text = f"{overall_attendance_percent:.2f}%"
+            # Merge attendance columns for percentage value
+            percent_row_idx = len(table.rows) - 1
+            merged_attendance_cell = table.cell(percent_row_idx, 2)
+            merged_attendance_cell.merge(table.cell(percent_row_idx, 3))
+            merged_attendance_cell.text = f"{overall_attendance_percent:.2f}%"
             for row in [total_row, percent_row]:
                 for cell in row.cells:
                     for paragraph in cell.paragraphs:
