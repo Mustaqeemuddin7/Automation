@@ -1,6 +1,3 @@
-# report_generator.py
-# Report generation functions for the LORDS Institute Progress Report System
-
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -8,6 +5,7 @@ from docx.enum.table import WD_TABLE_ALIGNMENT
 from io import BytesIO
 import concurrent.futures
 import streamlit as st
+from docx.enum.text import WD_BREAK
 
 def add_logo_and_header(doc, department_name):
     """Add institutional header to document with correct font and sizes"""
@@ -59,7 +57,7 @@ def get_student_complete_data(student_roll, subjects_data):
             student_complete_data['subjects'].append(subject_data)
     return student_complete_data
 
-def create_comprehensive_student_report(student_complete_data, department_name, report_date, template="Detailed", include_backlog=True, include_notes=True):
+def create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, template="Detailed", include_backlog=True, include_notes=True):
     """Create a comprehensive Word document report for a student with customizable template"""
     doc = Document()
     sections = doc.sections
@@ -83,7 +81,7 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
     title_run.font.underline = True
     personal_info = student_complete_data['personal_info']
     details_para = doc.add_paragraph()
-    details_text = f"Academic Year: 2024-2025".ljust(60) + "B.E- IV Semester\n"
+    details_text = f"Academic Year: {academic_year}".ljust(60) + f"{semester}\n"
     details_text += f"Roll No.              : {personal_info['roll_no']}\n"
     details_text += f"Name of the Student : {personal_info['student_name']}\n"
     details_text += f"Name of the Father   : {personal_info['father_name']}\n"
@@ -95,15 +93,41 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
     details_run.font.size = Pt(10)
     subjects = student_complete_data['subjects']
     if subjects:
-        table = doc.add_table(rows=1, cols=8)
+        # Create a two-row header with grouped columns like the reference image
+        table = doc.add_table(rows=2, cols=8)
         table.style = 'Table Grid'
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
-        headers = ['S.No.', 'Course Title', 'Attendance\n(From 03-02-2025 to 15-04-2025)\nNo. of Classes\nConducted', 'No. of Classes\nAttended', 'CIE-1 Marks\nDT\n(20)', 'ST\n(10)', 'AT\n(10)', 'Total\n(40)']
-        hdr_cells = table.rows[0].cells
-        for i, header in enumerate(headers):
-            if i < len(hdr_cells):
-                hdr_cells[i].text = header
-                for paragraph in hdr_cells[i].paragraphs:
+
+        # Top header row labels
+        top = table.rows[0].cells
+        bottom = table.rows[1].cells
+
+        # Merge S.No. and Course Title vertically
+        table.cell(0, 0).merge(table.cell(1, 0))
+        table.cell(0, 1).merge(table.cell(1, 1))
+        top[0].text = 'S. No.'
+        top[1].text = 'Course Title'
+
+        # Attendance group spanning two columns
+        attendance_top = table.cell(0, 2)
+        attendance_top.merge(table.cell(0, 3))
+        attendance_top.text = 'Attendance\n(From 03-02-2025 to 15-04-2025)'
+        bottom[2].text = 'No. of Classes\nConducted'
+        bottom[3].text = 'No. of Classes\nAttended'
+
+        # CIE-1 Marks group spanning four columns
+        marks_top = table.cell(0, 4)
+        marks_top.merge(table.cell(0, 7))
+        marks_top.text = 'CIE-1 Marks'
+        bottom[4].text = 'DT\n(20)'
+        bottom[5].text = 'ST\n(10)'
+        bottom[6].text = 'AT\n(10)'
+        bottom[7].text = 'Total\n(40)'
+
+        # Style header rows
+        for row in [table.rows[0], table.rows[1]]:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
                     for run in paragraph.runs:
                         run.font.name = 'Times New Roman'
                         run.font.bold = True
@@ -152,7 +176,11 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
         percent_row = table.add_row()
         percent_cells = percent_row.cells
         percent_cells[1].text = "Percentage"
-        percent_cells[3].text = f"{overall_attendance_percent:.2f}%"
+        # Merge attendance columns (Conducted and Attended) into one cell for percentage value
+        percent_row_idx = len(table.rows) - 1
+        merged_attendance_cell = table.cell(percent_row_idx, 2)
+        merged_attendance_cell.merge(table.cell(percent_row_idx, 3))
+        merged_attendance_cell.text = f"{overall_attendance_percent:.2f}%"
         for row in [total_row, percent_row]:
             for cell in row.cells:
                 for paragraph in cell.paragraphs:
@@ -189,68 +217,57 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                 notes_run = notes_para.add_run(notes_text)
                 notes_run.font.name = 'Times New Roman'
                 notes_run.font.size = Pt(9)
-                if include_backlog:
-                    doc.add_paragraph()
-                    backlog_para = doc.add_paragraph()
-                    backlog_run = backlog_para.add_run("Backlog Data:")
-                    backlog_run.font.name = 'Times New Roman'
-                    backlog_run.font.size = Pt(10)
-                    backlog_run.font.bold = True
+            if include_backlog:
+                backlog_para = doc.add_paragraph()
+                backlog_run = backlog_para.add_run("Backlog Data:")
+                backlog_run.font.name = 'Times New Roman'
+                backlog_run.font.size = Pt(10)
+                backlog_run.font.bold = True
+                backlog_table = doc.add_table(rows=2, cols=4)
+                backlog_table.style = 'Table Grid'
+                backlog_headers = ['I Sem.', 'II Sem.', 'III Sem.', 'Remarks by Head of the Department']
+                backlog_hdr_cells = backlog_table.rows[0].cells
+                for i, header in enumerate(backlog_headers):
+                    backlog_hdr_cells[i].text = header
+                    for paragraph in backlog_hdr_cells[i].paragraphs:
+                        for run in paragraph.runs:
+                            run.font.name = 'Times New Roman'
+                            run.font.bold = True
+                            run.font.size = Pt(9)
+                        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                backlog_data_cells = backlog_table.rows[1].cells
+                for cell in backlog_data_cells:
+                    cell.text = '-'
+                    for paragraph in cell.paragraphs:
+                        for run in paragraph.runs:
+                            run.font.name = 'Times New Roman'
+                            run.font.size = Pt(9)
+                        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                doc.add_paragraph()
+                signature_para = doc.add_paragraph()
+                signature_text = "Sign. of the student: ____________________   Sign. of the Parent/Guardian: ____________________"
+                signature_run = signature_para.add_run(signature_text)
+                signature_run.font.name = 'Times New Roman'
+                signature_run.font.size = Pt(9)
+                # doc.add_paragraph()
+                final_signature_para = doc.add_paragraph()
+                final_signature_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                mentor_run = final_signature_para.add_run("Mentor")
+                mentor_run.font.name = 'Times New Roman'
+                mentor_run.font.size = Pt(9)
+                spaces = " " * 60
+                final_signature_para.add_run(spaces)
+                hod_run = final_signature_para.add_run("Head of the Department")
+                hod_run.font.name = 'Times New Roman'
+                hod_run.font.size = Pt(9)
+    return doc
 
-                    backlog_table = doc.add_table(rows=2, cols=4)
-                    backlog_table.style = 'Table Grid'
-                    backlog_headers = ['I Sem.', 'II Sem.', 'III Sem.', 'Remarks by Head of the Department']
-                    backlog_hdr_cells = backlog_table.rows[0].cells
-
-                    for i, header in enumerate(backlog_headers):
-                        backlog_hdr_cells[i].text = header
-                        for paragraph in backlog_hdr_cells[i].paragraphs:
-                            for run in paragraph.runs:
-                                run.font.name = 'Times New Roman'
-                                run.font.bold = True
-                                run.font.size = Pt(9)
-                            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-                    backlog_data_cells = backlog_table.rows[1].cells
-                    for cell in backlog_data_cells:
-                        cell.text = '-'
-                        for paragraph in cell.paragraphs:
-                            for run in paragraph.runs:
-                                run.font.name = 'Times New Roman'
-                                run.font.size = Pt(9)
-                            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-
-                    # ✅ Now outside the loop → runs only once
-                    doc.add_paragraph()
-                    signature_para = doc.add_paragraph()
-                    signature_text = "Sign. of the student: ____________________   Sign. of the Parent/Guardian: ____________________"
-                    signature_run = signature_para.add_run(signature_text)
-                    signature_run.font.name = 'Times New Roman'
-                    signature_run.font.size = Pt(9)
-
-                    doc.add_paragraph()
-                    final_signature_para = doc.add_paragraph()
-                    final_signature_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-
-                    mentor_run = final_signature_para.add_run("Mentor")
-                    mentor_run.font.name = 'Times New Roman'
-                    mentor_run.font.size = Pt(9)
-
-                    spaces = " " * 60
-                    final_signature_para.add_run(spaces)
-
-                    hod_run = final_signature_para.add_run("Head of the Department")
-                    hod_run.font.name = 'Times New Roman'
-                    hod_run.font.size = Pt(9)
-
-                    return doc
-
-def generate_student_reports(student_roll, subjects_data, department_name, report_date, template="Detailed", include_backlog=True, include_notes=True):
+def generate_student_reports(student_roll, subjects_data, department_name, report_date, academic_year, semester, template="Detailed", include_backlog=True, include_notes=True):
     """Generate a comprehensive report for a single student in Word format"""
     student_complete_data = get_student_complete_data(student_roll, subjects_data)
     if not student_complete_data['subjects']:
         return {}
-    doc = create_comprehensive_student_report(student_complete_data, department_name, report_date, template, include_backlog, include_notes)
+    doc = create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, template, include_backlog, include_notes)
     doc_buffer = BytesIO()
     doc.save(doc_buffer)
     doc_buffer.seek(0)
@@ -259,7 +276,7 @@ def generate_student_reports(student_roll, subjects_data, department_name, repor
         f"{student_name}_Comprehensive_Report_docx": doc_buffer.getvalue()
     }
 
-def create_consolidated_all_students_report(all_students_data, subjects_data, department_name, report_date, template="Detailed", include_backlog=True, include_notes=True):
+def create_consolidated_all_students_report(all_students_data, subjects_data, department_name, report_date, academic_year, semester, template="Detailed", include_backlog=True, include_notes=True):
     """Create a single Word document containing all student reports, each on a separate page"""
     doc = Document()
     sections = doc.sections
@@ -288,7 +305,7 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
             title_run.font.underline = True
             personal_info = student_complete_data['personal_info']
             details_para = doc.add_paragraph()
-            details_text = f"Academic Year: 2024-2025".ljust(60) + "B.E- IV Semester\n"
+            details_text = f"Academic Year: {academic_year}".ljust(60) + f"{semester}\n"
             details_text += f"Roll No.              : {personal_info['roll_no']}\n"
             details_text += f"Name of the Student : {personal_info['student_name']}\n"
             details_text += f"Name of the Father   : {personal_info['father_name']}\n"
@@ -299,15 +316,36 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
             details_run.font.name = 'Times New Roman'
             details_run.font.size = Pt(10)
             subjects = student_complete_data['subjects']
-            table = doc.add_table(rows=1, cols=8)
+            # Two-row grouped header like the reference image
+            table = doc.add_table(rows=2, cols=8)
             table.style = 'Table Grid'
             table.alignment = WD_TABLE_ALIGNMENT.CENTER
-            headers = ['S.No.', 'Course Title', 'Attendance\n(From 03-02-2025 to 15-04-2025)\nNo. of Classes\nConducted', 'No. of Classes\nAttended', 'CIE-1 Marks\nDT\n(20)', 'ST\n(10)', 'AT\n(10)', 'Total\n(40)']
-            hdr_cells = table.rows[0].cells
-            for i, header in enumerate(headers):
-                if i < len(hdr_cells):
-                    hdr_cells[i].text = header
-                    for paragraph in hdr_cells[i].paragraphs:
+
+            top = table.rows[0].cells
+            bottom = table.rows[1].cells
+
+            table.cell(0, 0).merge(table.cell(1, 0))
+            table.cell(0, 1).merge(table.cell(1, 1))
+            top[0].text = 'S. No.'
+            top[1].text = 'Course Title'
+
+            attendance_top = table.cell(0, 2)
+            attendance_top.merge(table.cell(0, 3))
+            attendance_top.text = 'Attendance\n(From 03-02-2025 to 15-04-2025)'
+            bottom[2].text = 'No. of Classes\nConducted'
+            bottom[3].text = 'No. of Classes\nAttended'
+
+            marks_top = table.cell(0, 4)
+            marks_top.merge(table.cell(0, 7))
+            marks_top.text = 'CIE-1 Marks'
+            bottom[4].text = 'DT\n(20)'
+            bottom[5].text = 'ST\n(10)'
+            bottom[6].text = 'AT\n(10)'
+            bottom[7].text = 'Total\n(40)'
+
+            for row in [table.rows[0], table.rows[1]]:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
                         for run in paragraph.runs:
                             run.font.name = 'Times New Roman'
                             run.font.bold = True
@@ -356,7 +394,11 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
             percent_row = table.add_row()
             percent_cells = percent_row.cells
             percent_cells[1].text = "Percentage"
-            percent_cells[3].text = f"{overall_attendance_percent:.2f}%"
+            # Merge attendance columns for percentage value
+            percent_row_idx = len(table.rows) - 1
+            merged_attendance_cell = table.cell(percent_row_idx, 2)
+            merged_attendance_cell.merge(table.cell(percent_row_idx, 3))
+            merged_attendance_cell.text = f"{overall_attendance_percent:.2f}%"
             for row in [total_row, percent_row]:
                 for cell in row.cells:
                     for paragraph in cell.paragraphs:
@@ -394,7 +436,6 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                     notes_run.font.name = 'Times New Roman'
                     notes_run.font.size = Pt(9)
                 if include_backlog:
-                    doc.add_paragraph()
                     backlog_para = doc.add_paragraph()
                     backlog_run = backlog_para.add_run("Backlog Data:")
                     backlog_run.font.name = 'Times New Roman'
@@ -426,7 +467,7 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                 signature_run = signature_para.add_run(signature_text)
                 signature_run.font.name = 'Times New Roman'
                 signature_run.font.size = Pt(9)
-                doc.add_paragraph()
+                # doc.add_paragraph()
                 final_signature_para = doc.add_paragraph()
                 final_signature_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
                 mentor_run = final_signature_para.add_run("Mentor")
@@ -439,12 +480,12 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                 hod_run.font.size = Pt(9)
     return doc
 
-def generate_comprehensive_reports(all_students, subjects_data, department_name, report_date, template="Detailed", include_backlog=True, include_notes=True):
+def generate_comprehensive_reports(all_students, subjects_data, department_name, report_date, academic_year, semester, template="Detailed", include_backlog=True, include_notes=True):
     """Generate comprehensive reports for all students in parallel"""
     individual_reports = {}
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future_to_roll = {
-            executor.submit(generate_student_reports, roll, subjects_data, department_name, report_date, template, include_backlog, include_notes): roll
+            executor.submit(generate_student_reports, roll, subjects_data, department_name, report_date, academic_year, semester, template, include_backlog, include_notes): roll
             for roll in all_students
         }
         for future in concurrent.futures.as_completed(future_to_roll):
@@ -459,7 +500,7 @@ def generate_comprehensive_reports(all_students, subjects_data, department_name,
                     }
             except Exception as e:
                 st.error(f"Error generating report for {roll}: {str(e)}")
-    consolidated_doc = create_consolidated_all_students_report(all_students, subjects_data, department_name, report_date, template, include_backlog, include_notes)
+    consolidated_doc = create_consolidated_all_students_report(all_students, subjects_data, department_name, report_date, academic_year, semester, template, include_backlog, include_notes)
     consolidated_buffer = BytesIO()
     consolidated_doc.save(consolidated_buffer)
     consolidated_buffer.seek(0)
