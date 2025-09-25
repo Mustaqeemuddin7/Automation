@@ -98,7 +98,7 @@ def main():
                 st.subheader("Subject-wise Data Preview")
                 for subject_name, subject_df in subjects_data.items():
                     with st.expander(f"📚 {subject_name} ({len(subject_df)} students)"):
-                        st.dataframe(subject_df, width="stretch")                       
+                        st.dataframe(subject_df, use_container_width=True)                       
                         st.write("**Required Columns Present (after mapping)**:")
                         required_cols = list(COLUMN_MAPPINGS.keys())
                         for col in required_cols:
@@ -134,12 +134,41 @@ def main():
                     updated_subjects = []
                     for subject in student_data['subjects']:
                         st.subheader(f"Subject: {subject['subject_name']}")
-                        dt_marks = st.number_input(f"DT Marks (out of 30) - {subject['subject_name']}", min_value=0, max_value=30, value=int(subject['dt_marks']), step=1)
-                        st_marks = st.number_input(f"ST Marks (out of 10) - {subject['subject_name']}", min_value=0, max_value=10, value=int(subject['st_marks']), step=1)
-                        at_marks = st.number_input(f"AT Marks (out of 10) - {subject['subject_name']}", min_value=0, max_value=10, value=int(subject['at_marks']), step=1)
+                        dt_marks = st.number_input(
+                            f"DT Marks (out of 30) - {subject['subject_name']}",
+                            min_value=0,
+                            max_value=30,
+                            value=min(max(0, int(subject['dt_marks'])), 30),
+                            step=1
+                        )
+                        st_marks = st.number_input(
+                            f"ST Marks (out of 10) - {subject['subject_name']}",
+                            min_value=0,
+                            max_value=10,
+                            value=min(max(0, int(subject['st_marks'])), 10),
+                            step=1
+                        )
+                        at_marks = st.number_input(
+                            f"AT Marks (out of 10) - {subject['subject_name']}",
+                            min_value=0,
+                            max_value=10,
+                            value=min(max(0, int(subject['at_marks'])), 10),
+                            step=1
+                        )
                         total_marks = dt_marks + st_marks + at_marks
-                        attendance_conducted = st.number_input(f"Attendance Conducted - {subject['subject_name']}", min_value=0, value=int(subject['attendance_conducted']), step=1)
-                        attendance_present = st.number_input(f"Attendance Present - {subject['subject_name']}", min_value=0, max_value=attendance_conducted, value=int(subject['attendance_present']), step=1)
+                        attendance_conducted = st.number_input(
+                            f"Attendance Conducted - {subject['subject_name']}",
+                            min_value=0,
+                            value=max(0, int(subject['attendance_conducted'])),
+                            step=1
+                        )
+                        attendance_present = st.number_input(
+                            f"Attendance Present - {subject['subject_name']}",
+                            min_value=0,
+                            max_value=attendance_conducted,
+                            value=min(max(0, int(subject['attendance_present'])), int(attendance_conducted)),
+                            step=1
+                        )
                         updated_subjects.append({
                             'subject_name': subject['subject_name'],
                             'dt_marks': dt_marks,
@@ -278,7 +307,7 @@ def main():
         sample_subjects = create_sample_subject_data()
         st.write("**Mathematics Sample**:")
         sample_df = pd.DataFrame(sample_subjects['Mathematics'])
-        st.dataframe(sample_df.head(), width="stretch")
+        st.dataframe(sample_df.head(), use_container_width=True)
         st.subheader("📥 Download Sample Files")
         col1, col2, col3 = st.columns(3)
         for i, (subject_name, subject_data) in enumerate(sample_subjects.items()):
