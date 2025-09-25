@@ -57,7 +57,7 @@ def get_student_complete_data(student_roll, subjects_data):
             student_complete_data['subjects'].append(subject_data)
     return student_complete_data
 
-def create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, template="Detailed", include_backlog=True, include_notes=True):
+def create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True):
     """Create a comprehensive Word document report for a student with customizable template"""
     doc = Document()
     sections = doc.sections
@@ -111,7 +111,10 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
         # Attendance group spanning two columns
         attendance_top = table.cell(0, 2)
         attendance_top.merge(table.cell(0, 3))
-        attendance_top.text = 'Attendance\n(From 03-02-2025 to 15-04-2025)'
+        period_text = 'Attendance'
+        if attendance_start and attendance_end:
+            period_text += f"\n(From {attendance_start} to {attendance_end})"
+        attendance_top.text = period_text
         bottom[2].text = 'No. of Classes\nConducted'
         bottom[3].text = 'No. of Classes\nAttended'
 
@@ -262,12 +265,12 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                 hod_run.font.size = Pt(9)
     return doc
 
-def generate_student_reports(student_roll, subjects_data, department_name, report_date, academic_year, semester, template="Detailed", include_backlog=True, include_notes=True):
+def generate_student_reports(student_roll, subjects_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True):
     """Generate a comprehensive report for a single student in Word format"""
     student_complete_data = get_student_complete_data(student_roll, subjects_data)
     if not student_complete_data['subjects']:
         return {}
-    doc = create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, template, include_backlog, include_notes)
+    doc = create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, attendance_start, attendance_end, template, include_backlog, include_notes)
     doc_buffer = BytesIO()
     doc.save(doc_buffer)
     doc_buffer.seek(0)
@@ -276,7 +279,7 @@ def generate_student_reports(student_roll, subjects_data, department_name, repor
         f"{student_name}_Comprehensive_Report_docx": doc_buffer.getvalue()
     }
 
-def create_consolidated_all_students_report(all_students_data, subjects_data, department_name, report_date, academic_year, semester, template="Detailed", include_backlog=True, include_notes=True):
+def create_consolidated_all_students_report(all_students_data, subjects_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True):
     """Create a single Word document containing all student reports, each on a separate page"""
     doc = Document()
     sections = doc.sections
@@ -331,7 +334,10 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
 
             attendance_top = table.cell(0, 2)
             attendance_top.merge(table.cell(0, 3))
-            attendance_top.text = 'Attendance\n(From 03-02-2025 to 15-04-2025)'
+            period_text = 'Attendance'
+            if attendance_start and attendance_end:
+                period_text += f"\n(From {attendance_start} to {attendance_end})"
+            attendance_top.text = period_text
             bottom[2].text = 'No. of Classes\nConducted'
             bottom[3].text = 'No. of Classes\nAttended'
 
@@ -480,12 +486,12 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                 hod_run.font.size = Pt(9)
     return doc
 
-def generate_comprehensive_reports(all_students, subjects_data, department_name, report_date, academic_year, semester, template="Detailed", include_backlog=True, include_notes=True):
+def generate_comprehensive_reports(all_students, subjects_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True):
     """Generate comprehensive reports for all students in parallel"""
     individual_reports = {}
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future_to_roll = {
-            executor.submit(generate_student_reports, roll, subjects_data, department_name, report_date, academic_year, semester, template, include_backlog, include_notes): roll
+            executor.submit(generate_student_reports, roll, subjects_data, department_name, report_date, academic_year, semester, attendance_start, attendance_end, template, include_backlog, include_notes): roll
             for roll in all_students
         }
         for future in concurrent.futures.as_completed(future_to_roll):
@@ -500,7 +506,7 @@ def generate_comprehensive_reports(all_students, subjects_data, department_name,
                     }
             except Exception as e:
                 st.error(f"Error generating report for {roll}: {str(e)}")
-    consolidated_doc = create_consolidated_all_students_report(all_students, subjects_data, department_name, report_date, academic_year, semester, template, include_backlog, include_notes)
+    consolidated_doc = create_consolidated_all_students_report(all_students, subjects_data, department_name, report_date, academic_year, semester, attendance_start, attendance_end, template, include_backlog, include_notes)
     consolidated_buffer = BytesIO()
     consolidated_doc.save(consolidated_buffer)
     consolidated_buffer.seek(0)

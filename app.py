@@ -132,10 +132,18 @@ def main():
             report_date = st.date_input("Report Date", value=datetime.now(), help="Select the date to appear in the report")
             academic_year = st.text_input("Academic Year", value="2024-2025", help="Enter the academic year (e.g., 2024-2025)")
             semester = st.text_input("Semester", value="B.E- IV Semester", help="Enter the semester (e.g., B.E- IV Semester)")
+            col_a1, col_a2 = st.columns(2)
+            with col_a1:
+                attendance_start = st.date_input("Attendance Start Date", help="Select the start date for attendance period")
+            with col_a2:
+                attendance_end = st.date_input("Attendance End Date", help="Select the end date for attendance period")
             st.session_state['department_name'] = department_name
             st.session_state['report_date'] = report_date.strftime('%d.%m.%Y')
             st.session_state['academic_year'] = academic_year
             st.session_state['semester'] = semester
+            if attendance_start and attendance_end:
+                st.session_state['attendance_start'] = attendance_start.strftime('%d-%m-%Y')
+                st.session_state['attendance_end'] = attendance_end.strftime('%d-%m-%Y')
 
             st.subheader("✏️ Edit Student Data")
             edit_student = st.selectbox("Select student to edit:", options=[""] + all_students, key="edit_student_select")
@@ -199,6 +207,8 @@ def main():
                             report_date=st.session_state['report_date'],
                             academic_year=st.session_state['academic_year'],
                             semester=st.session_state['semester'],
+                            attendance_start=st.session_state.get('attendance_start', ''),
+                            attendance_end=st.session_state.get('attendance_end', ''),
                             template="Detailed",
                             include_backlog=True,
                             include_notes=True
