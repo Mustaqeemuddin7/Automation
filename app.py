@@ -107,7 +107,8 @@ def main():
                 st.subheader("Subject-wise Data Preview")
                 for subject_name, subject_df in subjects_data.items():
                     with st.expander(f"📚 {subject_name} ({len(subject_df)} students)"):
-                        st.dataframe(subject_df, width="stretch")                       
+                        st.dataframe(subject_df)            # default responsive width
+                       
                         st.write("**Required Columns Present (after mapping)**:")
                         required_cols = list(COLUMN_MAPPINGS.keys())
                         for col in required_cols:
@@ -293,7 +294,8 @@ def main():
         sample_subjects = create_sample_subject_data()
         st.write("**Mathematics Sample**:")
         sample_df = pd.DataFrame(sample_subjects['Mathematics'])
-        st.dataframe(sample_df.head(), width="stretch")
+        st.dataframe(sample_df.head())          # default width
+
         st.subheader("📥 Download Sample Files")
         col1, col2, col3 = st.columns(3)
         for i, (subject_name, subject_data) in enumerate(sample_subjects.items()):
