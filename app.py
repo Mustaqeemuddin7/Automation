@@ -1,6 +1,3 @@
-# app.py
-# Main Streamlit application for the LORDS Institute Progress Report System
-
 import streamlit as st
 import pandas as pd
 from io import BytesIO
@@ -21,45 +18,57 @@ with open("styles.css") as f:
 def main():
     st.markdown("""
     <div class="main-header">
-        <h1>🎓 LORDS Institute Enhanced Progress Report System</h1>
+        <h2>🎓 Lords Institute of Engineering and Technology</h2>
+        <h1>Lords Institute Enhanced Progress Report System</h1>
         <p>Comprehensive institutional progress reports with unified format</p>
     </div>
     """, unsafe_allow_html=True)
     
-    with st.sidebar:
+    # Replace sidebar with tabs
+    tabs = st.tabs([
+        "🏛 Institute Info",
+        "📁 Upload Subject Files",
+        "📊 Preview Data",
+        "📋 Generate Enhanced Reports",
+        "📋 Features",
+        "📥 Sample Data"
+    ])
+
+    with tabs[0]:
         st.markdown("""
-        <div class="institutional-header">
-            <h3>🏛️ LORDS Institute</h3>
-            <p>Engineering & Technology</p>
-        </div>
-        """, unsafe_allow_html=True)
-        st.header("📋 Enhanced Features")
-        st.markdown("""
-        <div class="feature-card">
-            <h4>📄 Comprehensive Reports</h4>
-            <p>Single report per student containing all subjects</p>
-        </div>
-        <div class="feature-card">
-            <h4>📚 Consolidated Document</h4>
-            <p>All student reports in one Word document</p>
-        </div>
-        <div class="feature-card">
-            <h4>📊 Enhanced Analytics</h4>
-            <p>Overall attendance and performance metrics</p>
-        </div>
-        <div class="feature-card">
-            <h4>🚀 Streamlined Process</h4>
-            <p>Efficient generation and distribution</p>
-        </div>
-        <div class="feature-card">
-            <h4>👀 Advanced Previews</h4>
-            <p>HTML and text report previews</p>
+        <div class="tab-content">
+            <h3>🏛 Lords Institute of Engineering and Technology</h3>
+            <p></p>
         </div>
         """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4 = st.tabs(["📁 Upload Subject Files", "📊 Preview Data", "📋 Generate Enhanced Reports", "📥 Sample Data"])
+    with tabs[5]:
+        st.markdown("""
+        <div class="tab-content">
+            <div class="feature-card">
+                <h4>📄 Comprehensive Reports</h4>
+                <p>Single report per student containing all subjects</p>
+            </div>
+            <div class="feature-card">
+                <h4>📚 Consolidated Document</h4>
+                <p>All student reports in one Word document</p>
+            </div>
+            <div class="feature-card">
+                <h4>📊 Enhanced Analytics</h4>
+                <p>Overall attendance and performance metrics</p>
+            </div>
+            <div class="feature-card">
+                <h4>🚀 Streamlined Process</h4>
+                <p>Efficient generation and distribution</p>
+            </div>
+            <div class="feature-card">
+                <h4>👀 Advanced Previews</h4>
+                <p>HTML and text report previews</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    with tab1:
+    with tabs[1]:
         st.header("Upload Subject Excel Files")
         st.info("Upload multiple Excel files - each file name represents a subject (e.g., Mathematics.xlsx, Physics.xlsx)")
         uploaded_files = st.file_uploader(
@@ -71,12 +80,12 @@ def main():
         if uploaded_files:
             st.success(f"✅ {len(uploaded_files)} subject files uploaded successfully!")
             subjects = [f.name.split('.')[0] for f in uploaded_files]
-            st.write("**Subjects detected**:")
+            st.write("*Subjects detected*:")
             for i, subject in enumerate(subjects, 1):
                 st.write(f"{i}. {subject}")
             st.session_state['uploaded_files'] = uploaded_files
 
-    with tab2:
+    with tabs[2]:
         st.header("Data Preview & Validation")
         if 'uploaded_files' in st.session_state:
             with st.spinner("Processing subject files..."):
@@ -98,8 +107,9 @@ def main():
                 st.subheader("Subject-wise Data Preview")
                 for subject_name, subject_df in subjects_data.items():
                     with st.expander(f"📚 {subject_name} ({len(subject_df)} students)"):
-                        st.dataframe(subject_df, use_container_width=True)                       
-                        st.write("**Required Columns Present (after mapping)**:")
+                        st.dataframe(subject_df)            # default responsive width
+                       
+                        st.write("*Required Columns Present (after mapping)*:")
                         required_cols = list(COLUMN_MAPPINGS.keys())
                         for col in required_cols:
                             status = "✅" if col in subject_df.columns else "❌"
@@ -109,21 +119,25 @@ def main():
         else:
             st.warning("Please upload subject Excel files in the 'Upload Subject Files' tab first.")
 
-    with tab3:
+    with tabs[3]:
         st.header("🎓 Generate Institutional Progress Reports")
         if 'subjects_data' in st.session_state:
             subjects_data = st.session_state['subjects_data']
             all_students = st.session_state['all_students']
             st.info(f"Ready to generate reports for {len(all_students)} students across {len(subjects_data)} subjects")
             
-            # New input fields for department name and report date
+            # Report Configuration
             st.subheader("Report Configuration")
             department_name = st.text_input("Department Name", value="Computer Science", help="Enter the department name to appear in the report")
             report_date = st.date_input("Report Date", value=datetime.now(), help="Select the date to appear in the report")
+            academic_year = st.text_input("Academic Year", value="2024-2025", help="Enter the academic year (e.g., 2024-2025)")
+            semester = st.text_input("Semester", value="B.E- IV Semester", help="Enter the semester (e.g., B.E- IV Semester)")
             st.session_state['department_name'] = department_name
             st.session_state['report_date'] = report_date.strftime('%d.%m.%Y')
+            st.session_state['academic_year'] = academic_year
+            st.session_state['semester'] = semester
 
-            st.subheader("✏️ Edit Student Data")
+            st.subheader("✏ Edit Student Data")
             edit_student = st.selectbox("Select student to edit:", options=[""] + all_students, key="edit_student_select")
             if edit_student:
                 student_data = get_student_complete_data(edit_student, subjects_data)
@@ -134,41 +148,12 @@ def main():
                     updated_subjects = []
                     for subject in student_data['subjects']:
                         st.subheader(f"Subject: {subject['subject_name']}")
-                        dt_marks = st.number_input(
-                            f"DT Marks (out of 30) - {subject['subject_name']}",
-                            min_value=0,
-                            max_value=30,
-                            value=min(max(0, int(subject['dt_marks'])), 30),
-                            step=1
-                        )
-                        st_marks = st.number_input(
-                            f"ST Marks (out of 10) - {subject['subject_name']}",
-                            min_value=0,
-                            max_value=10,
-                            value=min(max(0, int(subject['st_marks'])), 10),
-                            step=1
-                        )
-                        at_marks = st.number_input(
-                            f"AT Marks (out of 10) - {subject['subject_name']}",
-                            min_value=0,
-                            max_value=10,
-                            value=min(max(0, int(subject['at_marks'])), 10),
-                            step=1
-                        )
+                        dt_marks = st.number_input(f"DT Marks (out of 30) - {subject['subject_name']}", min_value=0, max_value=30, value=int(subject['dt_marks']), step=1)
+                        st_marks = st.number_input(f"ST Marks (out of 10) - {subject['subject_name']}", min_value=0, max_value=10, value=int(subject['st_marks']), step=1)
+                        at_marks = st.number_input(f"AT Marks (out of 10) - {subject['subject_name']}", min_value=0, max_value=10, value=int(subject['at_marks']), step=1)
                         total_marks = dt_marks + st_marks + at_marks
-                        attendance_conducted = st.number_input(
-                            f"Attendance Conducted - {subject['subject_name']}",
-                            min_value=0,
-                            value=max(0, int(subject['attendance_conducted'])),
-                            step=1
-                        )
-                        attendance_present = st.number_input(
-                            f"Attendance Present - {subject['subject_name']}",
-                            min_value=0,
-                            max_value=attendance_conducted,
-                            value=min(max(0, int(subject['attendance_present'])), int(attendance_conducted)),
-                            step=1
-                        )
+                        attendance_conducted = st.number_input(f"Attendance Conducted - {subject['subject_name']}", min_value=0, value=int(subject['attendance_conducted']), step=1)
+                        attendance_present = st.number_input(f"Attendance Present - {subject['subject_name']}", min_value=0, max_value=attendance_conducted, value=int(subject['attendance_present']), step=1)
                         updated_subjects.append({
                             'subject_name': subject['subject_name'],
                             'dt_marks': dt_marks,
@@ -212,6 +197,8 @@ def main():
                             subjects_data,
                             department_name=st.session_state['department_name'],
                             report_date=st.session_state['report_date'],
+                            academic_year=st.session_state['academic_year'],
+                            semester=st.session_state['semester'],
                             template="Detailed",
                             include_backlog=True,
                             include_notes=True
@@ -243,7 +230,7 @@ def main():
                     preview_report(st.session_state['consolidated_report'], "Consolidated Report")
                 st.subheader("Generated Student Reports")
                 student_reports = st.session_state['generated_student_reports']
-                st.write("**Individual Student Reports**:")
+                st.write("*Individual Student Reports*:")
                 for student_roll, report_data in student_reports.items():
                     student_name = report_data['student_name']
                     col1, col2 = st.columns([3, 1])
@@ -253,11 +240,11 @@ def main():
                         st.download_button(
                             label="Download DOCX",
                             data=report_data['docx_content'],
-                            file_name=f"{student_roll}_{student_name.replace(' ', '_')}_Report.docx",
+                            file_name=f"{student_roll}{student_name.replace(' ', '')}_Report.docx",
                             mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                             key=f"download_docx_{student_roll}"
                         )
-                st.write("**Consolidated Report (All Students)**:")
+                st.write("*Consolidated Report (All Students)*:")
                 if 'consolidated_report' in st.session_state:
                     st.download_button(
                         label="📥 Download Consolidated Report",
@@ -266,12 +253,12 @@ def main():
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         key="download_consolidated"
                     )
-                st.write("**Master ZIP Package**")
+                st.write("*Master ZIP Package*")
                 if st.button("📦 Generate Master ZIP"):
                     master_zip_buffer = BytesIO()
                     with zipfile.ZipFile(master_zip_buffer, 'w', zipfile.ZIP_DEFLATED) as master_zip:
                         for student_roll, report_data in student_reports.items():
-                            docx_filename = f"{student_roll}_{report_data['student_name'].replace(' ', '_')}_Report.docx"
+                            docx_filename = f"{student_roll}{report_data['student_name'].replace(' ', '')}_Report.docx"
                             master_zip.writestr(docx_filename, report_data['docx_content'])
                         master_zip.writestr(
                             f"Consolidated_Progress_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
@@ -288,26 +275,27 @@ def main():
         else:
             st.warning("Please process your subject data in the 'Preview Data' tab first.")
 
-    with tab4:
+    with tabs[4]:
         st.header("Sample Data & Template")
         st.subheader("📋 Required Excel Format")
         st.markdown("""
-        **Required Columns for each subject file (case-insensitive variations accepted)**:
-        - `roll_no`: Student roll number (e.g., Roll No, Roll Number, RollNo)
-        - `student_name`: Full name (e.g., Student Name, Name, Full Name)
-        - `father_name`: Father's name (e.g., Father Name, Father's Name)
-        - `dt_marks`: Descriptive Test marks (out of 30) (e.g., DT Marks, Descriptive Test)
-        - `st_marks`: Surprise Test marks (out of 10) (e.g., ST Marks, Surprise Test)
-        - `at_marks`: Assignment marks (out of 10) (e.g., AT Marks, Assignment Marks)
-        - `total_marks`: Total CIE-1 marks (out of 50) (e.g., Total Marks, Total)
-        - `attendance_conducted`: Classes conducted (e.g., Attendance Conducted, Total Classes)
-        - `attendance_present`: Classes attended (e.g., Attendance Present, Classes Attended)
+        *Required Columns for each subject file (case-insensitive variations accepted)*:
+        - roll_no: Student roll number (e.g., Roll No, Roll Number, RollNo)
+        - student_name: Full name (e.g., Student Name, Name, Full Name)
+        - father_name: Father's name (e.g., Father Name, Father's Name)
+        - dt_marks: Descriptive Test marks (out of 30) (e.g., DT Marks, Descriptive Test)
+        - st_marks: Surprise Test marks (out of 10) (e.g., ST Marks, Surprise Test)
+        - at_marks: Assignment marks (out of 10) (e.g., AT Marks, Assignment Marks)
+        - total_marks: Total CIE-1 marks (out of 50) (e.g., Total Marks, Total)
+        - attendance_conducted: Classes conducted (e.g., Attendance Conducted, Total Classes)
+        - attendance_present: Classes attended (e.g., Attendance Present, Classes Attended)
         """)
         st.subheader("📊 Sample Data")
         sample_subjects = create_sample_subject_data()
-        st.write("**Mathematics Sample**:")
+        st.write("*Mathematics Sample*:")
         sample_df = pd.DataFrame(sample_subjects['Mathematics'])
-        st.dataframe(sample_df.head(), use_container_width=True)
+        st.dataframe(sample_df.head())          # default width
+
         st.subheader("📥 Download Sample Files")
         col1, col2, col3 = st.columns(3)
         for i, (subject_name, subject_data) in enumerate(sample_subjects.items()):
@@ -332,12 +320,9 @@ def main():
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: #666; padding: 2rem;">
-        <h4>🏛️ LORDS Institute Progress Report System</h4>
-        <p>Professional institutional report generation with exact format compliance</p>
-        <p><strong>Features:</strong> Subject-wise Processing • Customizable Reports • Word Document Downloads • Parallel Processing</p>
+        <h2>🏛 Lords Institute of Engineering and Technology</h2>
     </div>
     """, unsafe_allow_html=True)
 
-if __name__ == "__main__":
+if _name_ == "_main_":
     main()
-
