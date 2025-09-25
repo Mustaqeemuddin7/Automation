@@ -1,507 +1,328 @@
-from docx import Document
-from docx.shared import Inches, Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT
-from io import BytesIO
-import concurrent.futures
 import streamlit as st
-from docx.enum.text import WD_BREAK
+import pandas as pd
+from io import BytesIO
+import zipfile
+from datetime import datetime
+from config import PAGE_CONFIG, COLUMN_MAPPINGS
+from utils import process_subject_files, preview_report
+from report_generator import generate_comprehensive_reports, get_student_complete_data
+from sample_data import create_sample_subject_data
 
-def add_logo_and_header(doc, department_name):
-    """Add institutional header to document with correct font and sizes"""
-    header_para = doc.add_paragraph()
-    header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = header_para.add_run("LORDS INSTITUTE OF ENGINEERING & TECHNOLOGY\n")
-    run.font.name = 'Times New Roman'
-    run.font.size = Pt(16)
-    run.font.bold = True
-    run = header_para.add_run("(Autonomous)\n")
-    run.font.name = 'Times New Roman'
-    run.font.size = Pt(10)
-    run = header_para.add_run("Approved by AICTE | Affiliated to Osmania University | Estd. 2003\n")
-    run.font.name = 'Times New Roman'
-    run.font.size = Pt(10)
-    run = header_para.add_run("Accredited with 'A' grade by NAAC | Accredited by NBA\n")
-    run.font.name = 'Times New Roman'
-    run.font.size = Pt(10)
-    run = header_para.add_run(f"DEPARTMENT OF {department_name.upper()}\n")
-    run.font.name = 'Times New Roman'
-    run.font.size = Pt(12)
-    run.font.bold = True
+# Set page configuration
+st.set_page_config(**PAGE_CONFIG)
 
-def get_student_complete_data(student_roll, subjects_data):
-    """Get complete data for a student across all subjects"""
-    student_complete_data = {
-        'personal_info': {},
-        'subjects': []
-    }
-    for subject_name, subject_df in subjects_data.items():
-        student_data = subject_df[subject_df['roll_no'] == student_roll]
-        if not student_data.empty:
-            student_info = student_data.iloc[0].to_dict()
-            if not student_complete_data['personal_info']:
-                student_complete_data['personal_info'] = {
-                    'roll_no': student_info['roll_no'],
-                    'student_name': student_info['student_name'],
-                    'father_name': student_info['father_name']
-                }
-            subject_data = {
-                'subject_name': subject_name,
-                'dt_marks': student_info.get('dt_marks', 0),
-                'st_marks': student_info.get('st_marks', 0),
-                'at_marks': student_info.get('at_marks', 0),
-                'total_marks': student_info.get('total_marks', 0),
-                'attendance_conducted': student_info.get('attendance_conducted', 0),
-                'attendance_present': student_info.get('attendance_present', 0)
-            }
-            student_complete_data['subjects'].append(subject_data)
-    return student_complete_data
+# Load CSS
+with open("styles.css") as f:
+    st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
-def create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, template="Detailed", include_backlog=True, include_notes=True):
-    """Create a comprehensive Word document report for a student with customizable template"""
-    doc = Document()
-    sections = doc.sections
-    for section in sections:
-        section.top_margin = Inches(0.5)
-        section.bottom_margin = Inches(0.5)
-        section.left_margin = Inches(0.5)
-        section.right_margin = Inches(0.5)
-    add_logo_and_header(doc, department_name)
-    date_para = doc.add_paragraph()
-    date_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    date_run = date_para.add_run(f"Date: {report_date}")
-    date_run.font.name = 'Times New Roman'
-    date_run.font.size = Pt(10)
-    title_para = doc.add_paragraph()
-    title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title_run = title_para.add_run("Progress Report")
-    title_run.font.name = 'Times New Roman'
-    title_run.font.size = Pt(14)
-    title_run.font.bold = True
-    title_run.font.underline = True
-    personal_info = student_complete_data['personal_info']
-    details_para = doc.add_paragraph()
-    details_text = f"Academic Year: {academic_year}".ljust(60) + f"{semester}\n"
-    details_text += f"Roll No.              : {personal_info['roll_no']}\n"
-    details_text += f"Name of the Student : {personal_info['student_name']}\n"
-    details_text += f"Name of the Father   : {personal_info['father_name']}\n"
-    if template == "Detailed":
-        details_text += "Dear Parent/Guardian,\n\n"
-        details_text += "The following are the details of the attendance and Continuous Internal Evaluation-1 of your ward. It is furnished for your information."
-    details_run = details_para.add_run(details_text)
-    details_run.font.name = 'Times New Roman'
-    details_run.font.size = Pt(10)
-    subjects = student_complete_data['subjects']
-    if subjects:
-        # Create a two-row header with grouped columns like the reference image
-        table = doc.add_table(rows=2, cols=8)
-        table.style = 'Table Grid'
-        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+def main():
+    st.markdown("""
+    <div class="main-header">
+        <h2>🎓 Lords Institute of Engineering and Technology</h2>
+        <h1>Lords Institute Enhanced Progress Report System</h1>
+        <p>Comprehensive institutional progress reports with unified format</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Replace sidebar with tabs
+    tabs = st.tabs([
+        "🏛 Institute Info",
+        "📁 Upload Subject Files",
+        "📊 Preview Data",
+        "📋 Generate Enhanced Reports",
+        "📋 Features",
+        "📥 Sample Data"
+    ])
 
-        # Top header row labels
-        top = table.rows[0].cells
-        bottom = table.rows[1].cells
+    with tabs[0]:
+        st.markdown("""
+        <div class="tab-content">
+            <h3>🏛 Lords Institute of Engineering and Technology</h3>
+            <p></p>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Merge S.No. and Course Title vertically
-        table.cell(0, 0).merge(table.cell(1, 0))
-        table.cell(0, 1).merge(table.cell(1, 1))
-        top[0].text = 'S. No.'
-        top[1].text = 'Course Title'
+    with tabs[5]:
+        st.markdown("""
+        <div class="tab-content">
+            <div class="feature-card">
+                <h4>📄 Comprehensive Reports</h4>
+                <p>Single report per student containing all subjects</p>
+            </div>
+            <div class="feature-card">
+                <h4>📚 Consolidated Document</h4>
+                <p>All student reports in one Word document</p>
+            </div>
+            <div class="feature-card">
+                <h4>📊 Enhanced Analytics</h4>
+                <p>Overall attendance and performance metrics</p>
+            </div>
+            <div class="feature-card">
+                <h4>🚀 Streamlined Process</h4>
+                <p>Efficient generation and distribution</p>
+            </div>
+            <div class="feature-card">
+                <h4>👀 Advanced Previews</h4>
+                <p>HTML and text report previews</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # Attendance group spanning two columns
-        attendance_top = table.cell(0, 2)
-        attendance_top.merge(table.cell(0, 3))
-        attendance_top.text = 'Attendance\n(From 03-02-2025 to 15-04-2025)'
-        bottom[2].text = 'No. of Classes\nConducted'
-        bottom[3].text = 'No. of Classes\nAttended'
+    with tabs[1]:
+        st.header("Upload Subject Excel Files")
+        st.info("Upload multiple Excel files - each file name represents a subject (e.g., Mathematics.xlsx, Physics.xlsx)")
+        uploaded_files = st.file_uploader(
+            "Upload Excel files (one per subject)",
+            type=['xlsx', 'xls'],
+            accept_multiple_files=True,
+            help="File names will be used as subject names"
+        )
+        if uploaded_files:
+            st.success(f"✅ {len(uploaded_files)} subject files uploaded successfully!")
+            subjects = [f.name.split('.')[0] for f in uploaded_files]
+            st.write("*Subjects detected*:")
+            for i, subject in enumerate(subjects, 1):
+                st.write(f"{i}. {subject}")
+            st.session_state['uploaded_files'] = uploaded_files
 
-        # CIE-1 Marks group spanning four columns
-        marks_top = table.cell(0, 4)
-        marks_top.merge(table.cell(0, 7))
-        marks_top.text = 'CIE-1 Marks'
-        bottom[4].text = 'DT\n(20)'
-        bottom[5].text = 'ST\n(10)'
-        bottom[6].text = 'AT\n(10)'
-        bottom[7].text = 'Total\n(40)'
+    with tabs[2]:
+        st.header("Data Preview & Validation")
+        if 'uploaded_files' in st.session_state:
+            with st.spinner("Processing subject files..."):
+                subjects_data, all_students, error = process_subject_files(st.session_state['uploaded_files'])
+            if error:
+                st.error(f"Error processing files: {error}")
+            else:
+                st.success("✅ Subject data processed successfully!")
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Total Subjects", len(subjects_data))
+                with col2:
+                    st.metric("Total Students", len(all_students))
+                with col3:
+                    total_records = sum(len(df) for df in subjects_data.values())
+                    st.metric("Total Records", total_records)
+                with col4:
+                    st.metric("Files Processed", len(st.session_state['uploaded_files']))
+                st.subheader("Subject-wise Data Preview")
+                for subject_name, subject_df in subjects_data.items():
+                    with st.expander(f"📚 {subject_name} ({len(subject_df)} students)"):
+                        st.dataframe(subject_df)            # default responsive width
+                       
+                        st.write("*Required Columns Present (after mapping)*:")
+                        required_cols = list(COLUMN_MAPPINGS.keys())
+                        for col in required_cols:
+                            status = "✅" if col in subject_df.columns else "❌"
+                            st.write(f"{status} {col}")
+                st.session_state['subjects_data'] = subjects_data
+                st.session_state['all_students'] = all_students
+        else:
+            st.warning("Please upload subject Excel files in the 'Upload Subject Files' tab first.")
 
-        # Style header rows
-        for row in [table.rows[0], table.rows[1]]:
-            for cell in row.cells:
-                for paragraph in cell.paragraphs:
-                    for run in paragraph.runs:
-                        run.font.name = 'Times New Roman'
-                        run.font.bold = True
-                        run.font.size = Pt(9)
-                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        total_attendance_conducted = 0
-        total_attendance_present = 0
-        total_marks_sum = 0
-        for idx, subject in enumerate(subjects):
-            data_row = table.add_row()
-            data_cells = data_row.cells
-            attendance_conducted = subject['attendance_conducted']
-            attendance_present = subject['attendance_present']
-            total_attendance_conducted += attendance_conducted
-            total_attendance_present += attendance_present
-            dt_marks = subject['dt_marks'] * 20 / 30
-            st_marks = subject['st_marks']
-            at_marks = subject['at_marks']
-            total_marks = dt_marks + st_marks + at_marks
-            total_marks_sum += total_marks
-            row_data = [
-                str(idx + 1),
-                subject['subject_name'],
-                str(attendance_conducted),
-                str(attendance_present),
-                str(round(dt_marks)),
-                str(st_marks),
-                str(at_marks),
-                str(round(total_marks))
-            ]
-            for i, data in enumerate(row_data):
-                if i < len(data_cells):
-                    data_cells[i].text = data
-                    for paragraph in data_cells[i].paragraphs:
-                        for run in paragraph.runs:
-                            run.font.name = 'Times New Roman'
-                            run.font.size = Pt(9)
-                        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        total_row = table.add_row()
-        total_cells = total_row.cells
-        total_cells[1].text = "TOTAL"
-        total_cells[2].text = str(total_attendance_conducted)
-        total_cells[3].text = str(total_attendance_present)
-        total_cells[7].text = str(round(total_marks_sum))
-        overall_attendance_percent = (total_attendance_present / total_attendance_conducted * 100) if total_attendance_conducted > 0 else 0
-        percent_row = table.add_row()
-        percent_cells = percent_row.cells
-        percent_cells[1].text = "Percentage"
-        # Merge attendance columns (Conducted and Attended) into one cell for percentage value
-        percent_row_idx = len(table.rows) - 1
-        merged_attendance_cell = table.cell(percent_row_idx, 2)
-        merged_attendance_cell.merge(table.cell(percent_row_idx, 3))
-        merged_attendance_cell.text = f"{overall_attendance_percent:.2f}%"
-        for row in [total_row, percent_row]:
-            for cell in row.cells:
-                for paragraph in cell.paragraphs:
-                    for run in paragraph.runs:
-                        run.font.name = 'Times New Roman'
-                        run.font.size = Pt(9)
-                        run.font.bold = True
-                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        if template == "Detailed":
-            doc.add_paragraph()
-            legend_para = doc.add_paragraph()
-            legend_text = "*DT – Descriptive Test  ST-Surprise Test  AT- Assignment"
-            legend_run = legend_para.add_run(legend_text)
-            legend_run.font.name = 'Times New Roman'
-            legend_run.font.size = Pt(9)
-            attendance_note = doc.add_paragraph()
-            attendance_status = "Poor" if overall_attendance_percent < 75 else "Satisfactory"
-            note_text = f"Your ward's attendance is {overall_attendance_percent:.2f}% which is {attendance_status}."
-            note_run = attendance_note.add_run(note_text)
-            note_run.font.name = 'Times New Roman'
-            note_run.font.size = Pt(9)
-            note_run.font.bold = True
-            if overall_attendance_percent < 75:
-                note_run.font.color.rgb = RGBColor(255, 0, 0)
-            if include_notes:
-                important_para = doc.add_paragraph()
-                important_run = important_para.add_run("Important Note:")
-                important_run.font.name = 'Times New Roman'
-                important_run.font.size = Pt(10)
-                important_run.font.bold = True
-                notes_text = "→ As per the Osmania University rules, a student must have minimum attendance of 75% in aggregate of all the subjects to be eligible or promoted for the next year. Students having less than 75% attendance in aggregate will not be issued Hall Ticket for the examination, such students will come under Condonation/Detention category.\n"
-                notes_text += "→ As per State Government rules, the student is not eligible for Scholarship if the attendance is less than 75%."
-                notes_para = doc.add_paragraph()
-                notes_run = notes_para.add_run(notes_text)
-                notes_run.font.name = 'Times New Roman'
-                notes_run.font.size = Pt(9)
-            if include_backlog:
-                backlog_para = doc.add_paragraph()
-                backlog_run = backlog_para.add_run("Backlog Data:")
-                backlog_run.font.name = 'Times New Roman'
-                backlog_run.font.size = Pt(10)
-                backlog_run.font.bold = True
-                backlog_table = doc.add_table(rows=2, cols=4)
-                backlog_table.style = 'Table Grid'
-                backlog_headers = ['I Sem.', 'II Sem.', 'III Sem.', 'Remarks by Head of the Department']
-                backlog_hdr_cells = backlog_table.rows[0].cells
-                for i, header in enumerate(backlog_headers):
-                    backlog_hdr_cells[i].text = header
-                    for paragraph in backlog_hdr_cells[i].paragraphs:
-                        for run in paragraph.runs:
-                            run.font.name = 'Times New Roman'
-                            run.font.bold = True
-                            run.font.size = Pt(9)
-                        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                backlog_data_cells = backlog_table.rows[1].cells
-                for cell in backlog_data_cells:
-                    cell.text = '-'
-                    for paragraph in cell.paragraphs:
-                        for run in paragraph.runs:
-                            run.font.name = 'Times New Roman'
-                            run.font.size = Pt(9)
-                        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                doc.add_paragraph()
-                signature_para = doc.add_paragraph()
-                signature_text = "Sign. of the student: ____________________   Sign. of the Parent/Guardian: ____________________"
-                signature_run = signature_para.add_run(signature_text)
-                signature_run.font.name = 'Times New Roman'
-                signature_run.font.size = Pt(9)
-                # doc.add_paragraph()
-                final_signature_para = doc.add_paragraph()
-                final_signature_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                mentor_run = final_signature_para.add_run("Mentor")
-                mentor_run.font.name = 'Times New Roman'
-                mentor_run.font.size = Pt(9)
-                spaces = " " * 60
-                final_signature_para.add_run(spaces)
-                hod_run = final_signature_para.add_run("Head of the Department")
-                hod_run.font.name = 'Times New Roman'
-                hod_run.font.size = Pt(9)
-    return doc
+    with tabs[3]:
+        st.header("🎓 Generate Institutional Progress Reports")
+        if 'subjects_data' in st.session_state:
+            subjects_data = st.session_state['subjects_data']
+            all_students = st.session_state['all_students']
+            st.info(f"Ready to generate reports for {len(all_students)} students across {len(subjects_data)} subjects")
+            
+            # Report Configuration
+            st.subheader("Report Configuration")
+            department_name = st.text_input("Department Name", value="Computer Science", help="Enter the department name to appear in the report")
+            report_date = st.date_input("Report Date", value=datetime.now(), help="Select the date to appear in the report")
+            academic_year = st.text_input("Academic Year", value="2024-2025", help="Enter the academic year (e.g., 2024-2025)")
+            semester = st.text_input("Semester", value="B.E- IV Semester", help="Enter the semester (e.g., B.E- IV Semester)")
+            st.session_state['department_name'] = department_name
+            st.session_state['report_date'] = report_date.strftime('%d.%m.%Y')
+            st.session_state['academic_year'] = academic_year
+            st.session_state['semester'] = semester
 
-def generate_student_reports(student_roll, subjects_data, department_name, report_date, academic_year, semester, template="Detailed", include_backlog=True, include_notes=True):
-    """Generate a comprehensive report for a single student in Word format"""
-    student_complete_data = get_student_complete_data(student_roll, subjects_data)
-    if not student_complete_data['subjects']:
-        return {}
-    doc = create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, template, include_backlog, include_notes)
-    doc_buffer = BytesIO()
-    doc.save(doc_buffer)
-    doc_buffer.seek(0)
-    student_name = student_complete_data['personal_info']['student_name']
-    return {
-        f"{student_name}_Comprehensive_Report_docx": doc_buffer.getvalue()
-    }
+            st.subheader("✏ Edit Student Data")
+            edit_student = st.selectbox("Select student to edit:", options=[""] + all_students, key="edit_student_select")
+            if edit_student:
+                student_data = get_student_complete_data(edit_student, subjects_data)
+                with st.form(key=f"edit_form_{edit_student}"):
+                    st.write(f"Editing data for {student_data['personal_info']['student_name']} ({edit_student})")
+                    new_student_name = st.text_input("Student Name", value=student_data['personal_info']['student_name'])
+                    new_father_name = st.text_input("Father Name", value=student_data['personal_info']['father_name'])
+                    updated_subjects = []
+                    for subject in student_data['subjects']:
+                        st.subheader(f"Subject: {subject['subject_name']}")
+                        dt_marks = st.number_input(f"DT Marks (out of 30) - {subject['subject_name']}", min_value=0, max_value=30, value=int(subject['dt_marks']), step=1)
+                        st_marks = st.number_input(f"ST Marks (out of 10) - {subject['subject_name']}", min_value=0, max_value=10, value=int(subject['st_marks']), step=1)
+                        at_marks = st.number_input(f"AT Marks (out of 10) - {subject['subject_name']}", min_value=0, max_value=10, value=int(subject['at_marks']), step=1)
+                        total_marks = dt_marks + st_marks + at_marks
+                        attendance_conducted = st.number_input(f"Attendance Conducted - {subject['subject_name']}", min_value=0, value=int(subject['attendance_conducted']), step=1)
+                        attendance_present = st.number_input(f"Attendance Present - {subject['subject_name']}", min_value=0, max_value=attendance_conducted, value=int(subject['attendance_present']), step=1)
+                        updated_subjects.append({
+                            'subject_name': subject['subject_name'],
+                            'dt_marks': dt_marks,
+                            'st_marks': st_marks,
+                            'at_marks': at_marks,
+                            'total_marks': total_marks,
+                            'attendance_conducted': attendance_conducted,
+                            'attendance_present': attendance_present
+                        })
+                    if st.form_submit_button("💾 Save Changes"):
+                        for subject in updated_subjects:
+                            subject_name = subject['subject_name']
+                            student_idx = subjects_data[subject_name][subjects_data[subject_name]['roll_no'] == edit_student].index
+                            if not student_idx.empty:
+                                subjects_data[subject_name].loc[student_idx, 'student_name'] = new_student_name
+                                subjects_data[subject_name].loc[student_idx, 'father_name'] = new_father_name
+                                subjects_data[subject_name].loc[student_idx, 'dt_marks'] = subject['dt_marks']
+                                subjects_data[subject_name].loc[student_idx, 'st_marks'] = subject['st_marks']
+                                subjects_data[subject_name].loc[student_idx, 'at_marks'] = subject['at_marks']
+                                subjects_data[subject_name].loc[student_idx, 'total_marks'] = subject['total_marks']
+                                subjects_data[subject_name].loc[student_idx, 'attendance_conducted'] = subject['attendance_conducted']
+                                subjects_data[subject_name].loc[student_idx, 'attendance_present'] = subject['attendance_present']
+                        st.session_state['subjects_data'] = subjects_data
+                        st.success(f"✅ Updated data for {new_student_name} ({edit_student})")
+            st.subheader("📄 Generate Reports")
+            col1, col2 = st.columns([2, 1])
+            with col1:
+                selected_students = st.multiselect(
+                    "Select students (leave empty for all):",
+                    options=all_students,
+                    default=[]
+                )
+            with col2:
+                if st.button("🚀 Generate Reports", type="primary"):
+                    students_to_process = selected_students if selected_students else all_students
+                    with st.spinner("Generating reports..."):
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
+                        individual_reports, consolidated_report = generate_comprehensive_reports(
+                            students_to_process,
+                            subjects_data,
+                            department_name=st.session_state['department_name'],
+                            report_date=st.session_state['report_date'],
+                            academic_year=st.session_state['academic_year'],
+                            semester=st.session_state['semester'],
+                            template="Detailed",
+                            include_backlog=True,
+                            include_notes=True
+                        )
+                        student_reports = {}
+                        for i, student_roll in enumerate(students_to_process):
+                            status_text.text(f"Processing student {student_roll} ({i+1}/{len(students_to_process)})")
+                            if student_roll in individual_reports:
+                                student_data = individual_reports[student_roll]
+                                student_reports[student_roll] = {
+                                    'docx_content': student_data['docx_content'],
+                                    'student_name': student_data['student_name']
+                                }
+                            progress = (i + 1) / len(students_to_process)
+                            progress_bar.progress(progress)
+                    st.session_state['generated_student_reports'] = student_reports
+                    st.session_state['consolidated_report'] = consolidated_report
+                    st.success(f"✅ Successfully generated reports for {len(student_reports)} students!")
+            if 'generated_student_reports' in st.session_state:
+                st.subheader("👀 View Generated Reports")
+                view_option = st.radio("Select report to view:", ["Single Student Report", "Consolidated Report"])
+                if view_option == "Single Student Report":
+                    view_student = st.selectbox("Select student", options=list(st.session_state['generated_student_reports'].keys()))
+                    if view_student:
+                        doc_content = st.session_state['generated_student_reports'][view_student]['docx_content']
+                        title = f"{st.session_state['generated_student_reports'][view_student]['student_name']} ({view_student})"
+                        preview_report(doc_content, title)
+                else:
+                    preview_report(st.session_state['consolidated_report'], "Consolidated Report")
+                st.subheader("Generated Student Reports")
+                student_reports = st.session_state['generated_student_reports']
+                st.write("*Individual Student Reports*:")
+                for student_roll, report_data in student_reports.items():
+                    student_name = report_data['student_name']
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.write(f"📄 {student_name} ({student_roll}) - Comprehensive Report")
+                    with col2:
+                        st.download_button(
+                            label="Download DOCX",
+                            data=report_data['docx_content'],
+                            file_name=f"{student_roll}{student_name.replace(' ', '')}_Report.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            key=f"download_docx_{student_roll}"
+                        )
+                st.write("*Consolidated Report (All Students)*:")
+                if 'consolidated_report' in st.session_state:
+                    st.download_button(
+                        label="📥 Download Consolidated Report",
+                        data=st.session_state['consolidated_report'],
+                        file_name=f"Consolidated_Progress_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key="download_consolidated"
+                    )
+                st.write("*Master ZIP Package*")
+                if st.button("📦 Generate Master ZIP"):
+                    master_zip_buffer = BytesIO()
+                    with zipfile.ZipFile(master_zip_buffer, 'w', zipfile.ZIP_DEFLATED) as master_zip:
+                        for student_roll, report_data in student_reports.items():
+                            docx_filename = f"{student_roll}{report_data['student_name'].replace(' ', '')}_Report.docx"
+                            master_zip.writestr(docx_filename, report_data['docx_content'])
+                        master_zip.writestr(
+                            f"Consolidated_Progress_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx",
+                            st.session_state['consolidated_report']
+                        )
+                    master_zip_buffer.seek(0)
+                    st.download_button(
+                        label="📥 Download Master ZIP (All Students)",
+                        data=master_zip_buffer.getvalue(),
+                        file_name=f"All_Student_Reports_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                        mime="application/zip",
+                        key="download_master_zip"
+                    )
+        else:
+            st.warning("Please process your subject data in the 'Preview Data' tab first.")
 
-def create_consolidated_all_students_report(all_students_data, subjects_data, department_name, report_date, academic_year, semester, template="Detailed", include_backlog=True, include_notes=True):
-    """Create a single Word document containing all student reports, each on a separate page"""
-    doc = Document()
-    sections = doc.sections
-    for section in sections:
-        section.top_margin = Inches(0.5)
-        section.bottom_margin = Inches(0.5)
-        section.left_margin = Inches(0.5)
-        section.right_margin = Inches(0.5)
-    for idx, student_roll in enumerate(all_students_data):
-        if idx > 0:
-            doc.add_page_break()
-        student_complete_data = get_student_complete_data(student_roll, subjects_data)
-        if student_complete_data['subjects']:
-            add_logo_and_header(doc, department_name)
-            date_para = doc.add_paragraph()
-            date_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            date_run = date_para.add_run(f"Date: {report_date}")
-            date_run.font.name = 'Times New Roman'
-            date_run.font.size = Pt(10)
-            title_para = doc.add_paragraph()
-            title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            title_run = title_para.add_run("Progress Report")
-            title_run.font.name = 'Times New Roman'
-            title_run.font.size = Pt(14)
-            title_run.font.bold = True
-            title_run.font.underline = True
-            personal_info = student_complete_data['personal_info']
-            details_para = doc.add_paragraph()
-            details_text = f"Academic Year: {academic_year}".ljust(60) + f"{semester}\n"
-            details_text += f"Roll No.              : {personal_info['roll_no']}\n"
-            details_text += f"Name of the Student : {personal_info['student_name']}\n"
-            details_text += f"Name of the Father   : {personal_info['father_name']}\n"
-            if template == "Detailed":
-                details_text += "Dear Parent/Guardian,\n\n"
-                details_text += "The following are the details of the attendance and Continuous Internal Evaluation-1 of your ward. It is furnished for your information."
-            details_run = details_para.add_run(details_text)
-            details_run.font.name = 'Times New Roman'
-            details_run.font.size = Pt(10)
-            subjects = student_complete_data['subjects']
-            # Two-row grouped header like the reference image
-            table = doc.add_table(rows=2, cols=8)
-            table.style = 'Table Grid'
-            table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    with tabs[4]:
+        st.header("Sample Data & Template")
+        st.subheader("📋 Required Excel Format")
+        st.markdown("""
+        *Required Columns for each subject file (case-insensitive variations accepted)*:
+        - roll_no: Student roll number (e.g., Roll No, Roll Number, RollNo)
+        - student_name: Full name (e.g., Student Name, Name, Full Name)
+        - father_name: Father's name (e.g., Father Name, Father's Name)
+        - dt_marks: Descriptive Test marks (out of 30) (e.g., DT Marks, Descriptive Test)
+        - st_marks: Surprise Test marks (out of 10) (e.g., ST Marks, Surprise Test)
+        - at_marks: Assignment marks (out of 10) (e.g., AT Marks, Assignment Marks)
+        - total_marks: Total CIE-1 marks (out of 50) (e.g., Total Marks, Total)
+        - attendance_conducted: Classes conducted (e.g., Attendance Conducted, Total Classes)
+        - attendance_present: Classes attended (e.g., Attendance Present, Classes Attended)
+        """)
+        st.subheader("📊 Sample Data")
+        sample_subjects = create_sample_subject_data()
+        st.write("*Mathematics Sample*:")
+        sample_df = pd.DataFrame(sample_subjects['Mathematics'])
+        st.dataframe(sample_df.head())          # default width
 
-            top = table.rows[0].cells
-            bottom = table.rows[1].cells
+        st.subheader("📥 Download Sample Files")
+        col1, col2, col3 = st.columns(3)
+        for i, (subject_name, subject_data) in enumerate(sample_subjects.items()):
+            col = [col1, col2, col3][i % 3]
+            with col:
+                excel_buffer = BytesIO()
+                df = pd.DataFrame(subject_data)
+                df.to_excel(excel_buffer, index=False, engine='openpyxl')
+                excel_buffer.seek(0)
+                st.download_button(
+                    label=f"📚 {subject_name}.xlsx",
+                    data=excel_buffer.getvalue(),
+                    file_name=f"{subject_name}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    key=f"sample_{subject_name}"
+                )
+        if st.button("🧪 Test with Sample Data"):
+            st.session_state['subjects_data'] = sample_subjects
+            st.session_state['all_students'] = list(set(pd.DataFrame(sample_subjects['Mathematics'])['roll_no'].tolist()))
+            st.success("✅ Sample data loaded! Go to 'Generate Reports' tab to test.")
 
-            table.cell(0, 0).merge(table.cell(1, 0))
-            table.cell(0, 1).merge(table.cell(1, 1))
-            top[0].text = 'S. No.'
-            top[1].text = 'Course Title'
+    st.markdown("---")
+    st.markdown("""
+    <div style="text-align: center; color: #666; padding: 2rem;">
+        <h2>🏛 Lords Institute of Engineering and Technology</h2>
+    </div>
+    """, unsafe_allow_html=True)
 
-            attendance_top = table.cell(0, 2)
-            attendance_top.merge(table.cell(0, 3))
-            attendance_top.text = 'Attendance\n(From 03-02-2025 to 15-04-2025)'
-            bottom[2].text = 'No. of Classes\nConducted'
-            bottom[3].text = 'No. of Classes\nAttended'
-
-            marks_top = table.cell(0, 4)
-            marks_top.merge(table.cell(0, 7))
-            marks_top.text = 'CIE-1 Marks'
-            bottom[4].text = 'DT\n(20)'
-            bottom[5].text = 'ST\n(10)'
-            bottom[6].text = 'AT\n(10)'
-            bottom[7].text = 'Total\n(40)'
-
-            for row in [table.rows[0], table.rows[1]]:
-                for cell in row.cells:
-                    for paragraph in cell.paragraphs:
-                        for run in paragraph.runs:
-                            run.font.name = 'Times New Roman'
-                            run.font.bold = True
-                            run.font.size = Pt(9)
-                        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            total_attendance_conducted = 0
-            total_attendance_present = 0
-            total_marks_sum = 0
-            for idx, subject in enumerate(subjects):
-                data_row = table.add_row()
-                data_cells = data_row.cells
-                attendance_conducted = subject['attendance_conducted']
-                attendance_present = subject['attendance_present']
-                total_attendance_conducted += attendance_conducted
-                total_attendance_present += attendance_present
-                dt_marks = subject['dt_marks'] * 20 / 30
-                st_marks = subject['st_marks']
-                at_marks = subject['at_marks']
-                total_marks = dt_marks + st_marks + at_marks
-                total_marks_sum += total_marks
-                row_data = [
-                    str(idx + 1),
-                    subject['subject_name'],
-                    str(attendance_conducted),
-                    str(attendance_present),
-                    str(round(dt_marks)),
-                    str(st_marks),
-                    str(at_marks),
-                    str(round(total_marks))
-                ]
-                for i, data in enumerate(row_data):
-                    if i < len(data_cells):
-                        data_cells[i].text = data
-                        for paragraph in data_cells[i].paragraphs:
-                            for run in paragraph.runs:
-                                run.font.name = 'Times New Roman'
-                                run.font.size = Pt(9)
-                            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            total_row = table.add_row()
-            total_cells = total_row.cells
-            total_cells[1].text = "TOTAL"
-            total_cells[2].text = str(total_attendance_conducted)
-            total_cells[3].text = str(total_attendance_present)
-            total_cells[7].text = str(round(total_marks_sum))
-            overall_attendance_percent = (total_attendance_present / total_attendance_conducted * 100) if total_attendance_conducted > 0 else 0
-            percent_row = table.add_row()
-            percent_cells = percent_row.cells
-            percent_cells[1].text = "Percentage"
-            # Merge attendance columns for percentage value
-            percent_row_idx = len(table.rows) - 1
-            merged_attendance_cell = table.cell(percent_row_idx, 2)
-            merged_attendance_cell.merge(table.cell(percent_row_idx, 3))
-            merged_attendance_cell.text = f"{overall_attendance_percent:.2f}%"
-            for row in [total_row, percent_row]:
-                for cell in row.cells:
-                    for paragraph in cell.paragraphs:
-                        for run in paragraph.runs:
-                            run.font.name = 'Times New Roman'
-                            run.font.size = Pt(9)
-                            run.font.bold = True
-                        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            if template == "Detailed":
-                doc.add_paragraph()
-                legend_para = doc.add_paragraph()
-                legend_text = "*DT – Descriptive Test  ST-Surprise Test  AT- Assignment"
-                legend_run = legend_para.add_run(legend_text)
-                legend_run.font.name = 'Times New Roman'
-                legend_run.font.size = Pt(9)
-                attendance_note = doc.add_paragraph()
-                attendance_status = "Poor" if overall_attendance_percent < 75 else "Satisfactory"
-                note_text = f"Your ward's attendance is {overall_attendance_percent:.2f}% which is {attendance_status}."
-                note_run = attendance_note.add_run(note_text)
-                note_run.font.name = 'Times New Roman'
-                note_run.font.size = Pt(9)
-                note_run.font.bold = True
-                if overall_attendance_percent < 75:
-                    note_run.font.color.rgb = RGBColor(255, 0, 0)
-                if include_notes:
-                    important_para = doc.add_paragraph()
-                    important_run = important_para.add_run("Important Note:")
-                    important_run.font.name = 'Times New Roman'
-                    important_run.font.size = Pt(10)
-                    important_run.font.bold = True
-                    notes_text = "→ As per the Osmania University rules, a student must have minimum attendance of 75% in aggregate of all the subjects to be eligible or promoted for the next year. Students having less than 75% attendance in aggregate will not be issued Hall Ticket for the examination, such students will come under Condonation/Detention category.\n"
-                    notes_text += "→ As per State Government rules, the student is not eligible for Scholarship if the attendance is less than 75%."
-                    notes_para = doc.add_paragraph()
-                    notes_run = notes_para.add_run(notes_text)
-                    notes_run.font.name = 'Times New Roman'
-                    notes_run.font.size = Pt(9)
-                if include_backlog:
-                    backlog_para = doc.add_paragraph()
-                    backlog_run = backlog_para.add_run("Backlog Data:")
-                    backlog_run.font.name = 'Times New Roman'
-                    backlog_run.font.size = Pt(10)
-                    backlog_run.font.bold = True
-                    backlog_table = doc.add_table(rows=2, cols=4)
-                    backlog_table.style = 'Table Grid'
-                    backlog_headers = ['I Sem.', 'II Sem.', 'III Sem.', 'Remarks by Head of the Department']
-                    backlog_hdr_cells = backlog_table.rows[0].cells
-                    for i, header in enumerate(backlog_headers):
-                        backlog_hdr_cells[i].text = header
-                        for paragraph in backlog_hdr_cells[i].paragraphs:
-                            for run in paragraph.runs:
-                                run.font.name = 'Times New Roman'
-                                run.font.bold = True
-                                run.font.size = Pt(9)
-                            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                    backlog_data_cells = backlog_table.rows[1].cells
-                    for cell in backlog_data_cells:
-                        cell.text = "-"
-                        for paragraph in cell.paragraphs:
-                            for run in paragraph.runs:
-                                run.font.name = 'Times New Roman'
-                                run.font.size = Pt(9)
-                            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                doc.add_paragraph()
-                signature_para = doc.add_paragraph()
-                signature_text = "Sign. of the student: ________________    Sign. of the Parent/Guardian: ________________"
-                signature_run = signature_para.add_run(signature_text)
-                signature_run.font.name = 'Times New Roman'
-                signature_run.font.size = Pt(9)
-                # doc.add_paragraph()
-                final_signature_para = doc.add_paragraph()
-                final_signature_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                mentor_run = final_signature_para.add_run("Mentor")
-                mentor_run.font.name = 'Times New Roman'
-                mentor_run.font.size = Pt(9)
-                spaces = " " * 60
-                final_signature_para.add_run(spaces)
-                hod_run = final_signature_para.add_run("Head of the Department")
-                hod_run.font.name = 'Times New Roman'
-                hod_run.font.size = Pt(9)
-    return doc
-
-def generate_comprehensive_reports(all_students, subjects_data, department_name, report_date, academic_year, semester, template="Detailed", include_backlog=True, include_notes=True):
-    """Generate comprehensive reports for all students in parallel"""
-    individual_reports = {}
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_to_roll = {
-            executor.submit(generate_student_reports, roll, subjects_data, department_name, report_date, academic_year, semester, template, include_backlog, include_notes): roll
-            for roll in all_students
-        }
-        for future in concurrent.futures.as_completed(future_to_roll):
-            roll = future_to_roll[future]
-            try:
-                report = future.result()
-                if report:
-                    student_name = list(report.keys())[0].split('_Comprehensive_Report_docx')[0]
-                    individual_reports[roll] = {
-                        'docx_content': report[f"{student_name}_Comprehensive_Report_docx"],
-                        'student_name': student_name
-                    }
-            except Exception as e:
-                st.error(f"Error generating report for {roll}: {str(e)}")
-    consolidated_doc = create_consolidated_all_students_report(all_students, subjects_data, department_name, report_date, academic_year, semester, template, include_backlog, include_notes)
-    consolidated_buffer = BytesIO()
-    consolidated_doc.save(consolidated_buffer)
-    consolidated_buffer.seek(0)
-    return individual_reports, consolidated_buffer.getvalue()
+if _name_ == "_main_":
+    main()
