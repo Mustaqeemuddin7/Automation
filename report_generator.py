@@ -52,7 +52,8 @@ def get_student_complete_data(student_roll, subjects_data):
                 'at_marks': student_info.get('at_marks', 0),
                 'total_marks': student_info.get('total_marks', 0),
                 'attendance_conducted': student_info.get('attendance_conducted', 0),
-                'attendance_present': student_info.get('attendance_present', 0)
+                'attendance_present': student_info.get('attendance_present', 0),
+                'is_lab': student_info.get('is_lab', False)
             }
             student_complete_data['subjects'].append(subject_data)
     return student_complete_data
@@ -136,30 +137,42 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                         run.font.bold = True
                         run.font.size = Pt(9)
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        # We'll enforce S.No. width after the table is fully built
+        # Use default auto-fit widths (restored)
         total_attendance_conducted = 0
         total_attendance_present = 0
         total_marks_sum = 0
-        for idx, subject in enumerate(subjects):
+        # Sort: theory first (is_lab False/absent), then labs
+        subjects_sorted = sorted(subjects, key=lambda s: 1 if s.get('is_lab', False) else 0)
+        for idx, subject in enumerate(subjects_sorted):
             data_row = table.add_row()
             data_cells = data_row.cells
             attendance_conducted = subject['attendance_conducted']
             attendance_present = subject['attendance_present']
             total_attendance_conducted += attendance_conducted
             total_attendance_present += attendance_present
-            dt_marks = subject['dt_marks'] * 20 / 30
-            st_marks = subject['st_marks']
-            at_marks = subject['at_marks']
-            total_marks = dt_marks + st_marks + at_marks
-            total_marks_sum += total_marks
+            is_lab = bool(subject.get('is_lab', False))
+            if is_lab:
+                # For labs, we will merge DT/ST/AT/Total cells later and set a single '-'
+                dt_marks = ''
+                st_marks = ''
+                at_marks = ''
+                total_marks = ''
+            else:
+                dt_marks = subject['dt_marks'] * 20 / 30
+                st_marks = subject['st_marks']
+                at_marks = subject['at_marks']
+                total_marks = dt_marks + st_marks + at_marks
+                total_marks_sum += total_marks
             row_data = [
                 str(idx + 1),
                 subject['subject_name'],
                 str(attendance_conducted),
                 str(attendance_present),
-                str(round(dt_marks)),
-                str(st_marks),
-                str(at_marks),
-                str(round(total_marks))
+                (str(round(dt_marks)) if dt_marks not in ('', '-') else ''),
+                (str(st_marks) if st_marks not in ('', '-') else ''),
+                (str(at_marks) if at_marks not in ('', '-') else ''),
+                (str(round(total_marks)) if total_marks not in ('', '-') else '')
             ]
             for i, data in enumerate(row_data):
                 if i < len(data_cells):
@@ -169,12 +182,34 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                             run.font.name = 'Times New Roman'
                             run.font.size = Pt(9)
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            # For lab subjects, merge DT, ST, AT and Total cells into one and set a single '-'
+            if is_lab:
+                try:
+                    merged = data_cells[4].merge(data_cells[5])
+                    merged = merged.merge(data_cells[6])
+                    merged = merged.merge(data_cells[7])
+                    # Set a single hyphen and center it
+                    merged.text = '-'
+                    for paragraph in merged.paragraphs:
+                        for run in paragraph.runs:
+                            run.font.name = 'Times New Roman'
+                            run.font.size = Pt(9)
+                        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                except Exception:
+                    pass
         total_row = table.add_row()
         total_cells = total_row.cells
         total_cells[1].text = "TOTAL"
         total_cells[2].text = str(total_attendance_conducted)
         total_cells[3].text = str(total_attendance_present)
-        total_cells[7].text = str(round(total_marks_sum))
+        # Merge DT, ST, AT, Total cells in TOTAL row
+        try:
+            merged_total = total_cells[4].merge(total_cells[5])
+            merged_total = merged_total.merge(total_cells[6])
+            merged_total = merged_total.merge(total_cells[7])
+            merged_total.text = ''
+        except Exception:
+            pass
         overall_attendance_percent = (total_attendance_present / total_attendance_conducted * 100) if total_attendance_conducted > 0 else 0
         percent_row = table.add_row()
         percent_cells = percent_row.cells
@@ -184,6 +219,19 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
         merged_attendance_cell = table.cell(percent_row_idx, 2)
         merged_attendance_cell.merge(table.cell(percent_row_idx, 3))
         merged_attendance_cell.text = f"{overall_attendance_percent:.2f}%"
+        # Merge DT/ST/AT/Total for percentage row and place '-'
+        try:
+            merged_marks_cell = table.cell(percent_row_idx, 4).merge(table.cell(percent_row_idx, 5))
+            merged_marks_cell = merged_marks_cell.merge(table.cell(percent_row_idx, 6))
+            merged_marks_cell = merged_marks_cell.merge(table.cell(percent_row_idx, 7))
+            merged_marks_cell.text = '-'
+            for p in merged_marks_cell.paragraphs:
+                for run in p.runs:
+                    run.font.name = 'Times New Roman'
+                    run.font.size = Pt(9)
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        except Exception:
+            pass
         for row in [total_row, percent_row]:
             for cell in row.cells:
                 for paragraph in cell.paragraphs:
@@ -192,8 +240,32 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                         run.font.size = Pt(9)
                         run.font.bold = True
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+        # Enforce compact widths after table is complete to match reference image
+        try:
+            table.autofit = False
+            # Set specific column widths as per specifications
+            table.columns[0].width = Inches(0.1)  # S.No. = 0.1 cm
+            table.columns[1].width = Inches(0.3)  # Course Title = 3 times S.No. (0.3 cm)
+            table.columns[2].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
+            table.columns[3].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
+            # CIE-1 Marks columns = 5 times S.No. (0.5 cm)
+            table.columns[4].width = Inches(0.5)  # DT (20)
+            table.columns[5].width = Inches(0.5)  # ST (10)
+            table.columns[6].width = Inches(0.5)  # AT (10)
+            table.columns[7].width = Inches(0.5)  # Total (40)
+        except Exception:
+            # Fallback for individual cell width setting
+            for r in table.rows:
+                r.cells[0].width = Inches(0.1)  # S.No. = 0.1 cm
+                r.cells[1].width = Inches(0.3)  # Course Title = 3 times S.No. (0.3 cm)
+                r.cells[2].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
+                r.cells[3].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
+                r.cells[4].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
+                r.cells[5].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
+                r.cells[6].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
+                r.cells[7].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
         if template == "Detailed":
-            doc.add_paragraph()
             legend_para = doc.add_paragraph()
             legend_text = "*DT – Descriptive Test  ST-Surprise Test  AT- Assignment"
             legend_run = legend_para.add_run(legend_text)
@@ -357,30 +429,40 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                             run.font.bold = True
                             run.font.size = Pt(9)
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            # Use default auto-fit widths (restored)
             total_attendance_conducted = 0
             total_attendance_present = 0
             total_marks_sum = 0
-            for idx, subject in enumerate(subjects):
+            subjects_sorted = sorted(subjects, key=lambda s: 1 if s.get('is_lab', False) else 0)
+            # We'll enforce S.No. width after table completion
+            for idx, subject in enumerate(subjects_sorted):
                 data_row = table.add_row()
                 data_cells = data_row.cells
                 attendance_conducted = subject['attendance_conducted']
                 attendance_present = subject['attendance_present']
                 total_attendance_conducted += attendance_conducted
                 total_attendance_present += attendance_present
-                dt_marks = subject['dt_marks'] * 20 / 30
-                st_marks = subject['st_marks']
-                at_marks = subject['at_marks']
-                total_marks = dt_marks + st_marks + at_marks
-                total_marks_sum += total_marks
+                is_lab = bool(subject.get('is_lab', False))
+                if is_lab:
+                    dt_marks = '-'
+                    st_marks = '-'
+                    at_marks = '-'
+                    total_marks = '-'
+                else:
+                    dt_marks = subject['dt_marks'] * 20 / 30
+                    st_marks = subject['st_marks']
+                    at_marks = subject['at_marks']
+                    total_marks = dt_marks + st_marks + at_marks
+                    total_marks_sum += total_marks
                 row_data = [
                     str(idx + 1),
                     subject['subject_name'],
                     str(attendance_conducted),
                     str(attendance_present),
-                    str(round(dt_marks)),
-                    str(st_marks),
-                    str(at_marks),
-                    str(round(total_marks))
+                    (str(round(dt_marks)) if dt_marks != '-' else '-'),
+                    (str(st_marks) if st_marks != '-' else '-'),
+                    (str(at_marks) if at_marks != '-' else '-'),
+                    (str(round(total_marks)) if total_marks != '-' else '-')
                 ]
                 for i, data in enumerate(row_data):
                     if i < len(data_cells):
@@ -390,12 +472,31 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                                 run.font.name = 'Times New Roman'
                                 run.font.size = Pt(9)
                             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                if is_lab:
+                    try:
+                        merged = data_cells[4].merge(data_cells[5])
+                        merged = merged.merge(data_cells[6])
+                        merged = merged.merge(data_cells[7])
+                        merged.text = '-'
+                        for paragraph in merged.paragraphs:
+                            for run in paragraph.runs:
+                                run.font.name = 'Times New Roman'
+                                run.font.size = Pt(9)
+                            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    except Exception:
+                        pass
             total_row = table.add_row()
             total_cells = total_row.cells
             total_cells[1].text = "TOTAL"
             total_cells[2].text = str(total_attendance_conducted)
             total_cells[3].text = str(total_attendance_present)
-            total_cells[7].text = str(round(total_marks_sum))
+            try:
+                merged_total = total_cells[4].merge(total_cells[5])
+                merged_total = merged_total.merge(total_cells[6])
+                merged_total = merged_total.merge(total_cells[7])
+                merged_total.text = ''
+            except Exception:
+                pass
             overall_attendance_percent = (total_attendance_present / total_attendance_conducted * 100) if total_attendance_conducted > 0 else 0
             percent_row = table.add_row()
             percent_cells = percent_row.cells
@@ -405,6 +506,18 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
             merged_attendance_cell = table.cell(percent_row_idx, 2)
             merged_attendance_cell.merge(table.cell(percent_row_idx, 3))
             merged_attendance_cell.text = f"{overall_attendance_percent:.2f}%"
+            try:
+                merged_marks_cell = table.cell(percent_row_idx, 4).merge(table.cell(percent_row_idx, 5))
+                merged_marks_cell = merged_marks_cell.merge(table.cell(percent_row_idx, 6))
+                merged_marks_cell = merged_marks_cell.merge(table.cell(percent_row_idx, 7))
+                merged_marks_cell.text = '-'
+                for p in merged_marks_cell.paragraphs:
+                    for run in p.runs:
+                        run.font.name = 'Times New Roman'
+                        run.font.size = Pt(9)
+                    p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            except Exception:
+                pass
             for row in [total_row, percent_row]:
                 for cell in row.cells:
                     for paragraph in cell.paragraphs:
@@ -413,8 +526,32 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                             run.font.size = Pt(9)
                             run.font.bold = True
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+            # Enforce compact widths at the end to match reference image
+            try:
+                table.autofit = False
+                # Set specific column widths as per specifications
+                table.columns[0].width = Inches(0.1)  # S.No. = 0.1 cm
+                table.columns[1].width = Inches(0.3)  # Course Title = 3 times S.No. (0.3 cm)
+                table.columns[2].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
+                table.columns[3].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
+                # CIE-1 Marks columns = 5 times S.No. (0.5 cm)
+                table.columns[4].width = Inches(0.5)  # DT (20)
+                table.columns[5].width = Inches(0.5)  # ST (10)
+                table.columns[6].width = Inches(0.5)  # AT (10)
+                table.columns[7].width = Inches(0.5)  # Total (40)
+            except Exception:
+                # Fallback for individual cell width setting
+                for r in table.rows:
+                    r.cells[0].width = Inches(0.1)  # S.No. = 0.1 cm
+                    r.cells[1].width = Inches(0.3)  # Course Title = 3 times S.No. (0.3 cm)
+                    r.cells[2].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
+                    r.cells[3].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
+                    r.cells[4].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
+                    r.cells[5].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
+                    r.cells[6].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
+                    r.cells[7].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
             if template == "Detailed":
-                doc.add_paragraph()
                 legend_para = doc.add_paragraph()
                 legend_text = "*DT – Descriptive Test  ST-Surprise Test  AT- Assignment"
                 legend_run = legend_para.add_run(legend_text)

@@ -25,23 +25,39 @@ def map_column_name(col_name):
 
 @st.cache_data
 def process_subject_files(uploaded_files):
-    """Process multiple Excel files, each representing a subject, with flexible column name mapping"""
+    """Process multiple Excel files (theory and lab), each representing a subject.
+    Labs may contain only attendance columns; theory files include marks.
+    """
     try:
         subjects_data = {}
         all_students = set()
-        required_columns = list(COLUMN_MAPPINGS.keys())
+        # Minimal required columns for any subject (lab or theory)
+        minimal_required = ['roll_no', 'student_name', 'father_name', 'attendance_conducted', 'attendance_present']
         for file in uploaded_files:
             subject_name = file.name.split('.')[0]
             df = pd.read_excel(file)
             column_mapping = {}
             for col in df.columns:
                 standardized_col = map_column_name(col)
-                if standardized_col in required_columns:
+                if standardized_col in COLUMN_MAPPINGS.keys():
                     column_mapping[col] = standardized_col
             df = df.rename(columns=column_mapping)
-            missing_cols = [col for col in required_columns if col not in df.columns]
-            if missing_cols:
-                return None, None, f"Missing required columns in {subject_name}: {', '.join(missing_cols)}"
+            # Validate minimal columns
+            missing_min = [col for col in minimal_required if col not in df.columns]
+            if missing_min:
+                return None, None, f"Missing required columns in {subject_name}: {', '.join(missing_min)}"
+
+            # Determine if this is a lab file (no marks present)
+            has_dt = 'dt_marks' in df.columns
+            has_st = 'st_marks' in df.columns
+            has_at = 'at_marks' in df.columns
+            is_lab_file = not (has_dt or has_st or has_at)
+
+            # Ensure marks columns exist; for labs, fill with 0 to avoid UI errors
+            for col in ['dt_marks', 'st_marks', 'at_marks', 'total_marks']:
+                if col not in df.columns:
+                    df[col] = 0
+            df['is_lab'] = is_lab_file
             subjects_data[subject_name] = df
             if 'roll_no' in df.columns:
                 all_students.update(df['roll_no'].tolist())
