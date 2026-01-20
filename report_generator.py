@@ -8,24 +8,93 @@ import streamlit as st
 from docx.enum.text import WD_BREAK
 import pandas as pd
 
+import os
+
 def add_logo_and_header(doc, department_name):
-    """Add institutional header to document with correct font and sizes"""
-    header_para = doc.add_paragraph()
-    header_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = header_para.add_run("LORDS INSTITUTE OF ENGINEERING & TECHNOLOGY\n")
+    """Add institutional header with logo on left, text on right (table layout), matching main format.docx"""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    
+    # Create a table for logo (left) + header text (right)
+    header_table = doc.add_table(rows=1, cols=2)
+    header_table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    header_table.autofit = False
+    
+    # Remove table borders first (invisible table)
+    tbl = header_table._tbl
+    tblPr = tbl.tblPr if tbl.tblPr is not None else OxmlElement('w:tblPr')
+    tblBorders = OxmlElement('w:tblBorders')
+    for border_name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
+        border = OxmlElement(f'w:{border_name}')
+        border.set(qn('w:val'), 'nil')
+        border.set(qn('w:sz'), '0')
+        border.set(qn('w:space'), '0')
+        tblBorders.append(border)
+    tblPr.append(tblBorders)
+    if tbl.tblPr is None:
+        tbl.insert(0, tblPr)
+    
+    # Logo cell (left) - set cell width explicitly
+    logo_cell = header_table.cell(0, 0)
+    logo_cell.width = Inches(1.0)
+    logo_path = os.path.join(os.path.dirname(__file__), 'assests', 'image.png')
+    if os.path.exists(logo_path):
+        try:
+            logo_para = logo_cell.paragraphs[0]
+            logo_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            logo_run = logo_para.add_run()
+            logo_run.add_picture(logo_path, width=Inches(0.8))
+        except Exception:
+            pass
+    
+    # Header text cell (right) - set cell width explicitly
+    text_cell = header_table.cell(0, 1)
+    text_cell.width = Inches(6.5)
+    from docx.shared import Twips
+    
+    # Line 1: Institution name
+    p1 = text_cell.paragraphs[0]
+    p1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p1.paragraph_format.space_before = Twips(0)
+    p1.paragraph_format.space_after = Twips(0)
+    run = p1.add_run("LORDS INSTITUTE OF ENGINEERING &TECHNOLOGY")
     run.font.name = 'Times New Roman'
-    run.font.size = Pt(16)
+    run.font.size = Pt(14)
     run.font.bold = True
-    run = header_para.add_run("(Autonomous)\n")
+    
+    # Line 2: Autonomous
+    p2 = text_cell.add_paragraph()
+    p2.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p2.paragraph_format.space_before = Twips(0)
+    p2.paragraph_format.space_after = Twips(0)
+    run = p2.add_run("(Autonomous)")
     run.font.name = 'Times New Roman'
     run.font.size = Pt(10)
-    run = header_para.add_run("Approved by AICTE | Affiliated to Osmania University | Estd. 2003\n")
+    
+    # Line 3: AICTE
+    p3 = text_cell.add_paragraph()
+    p3.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p3.paragraph_format.space_before = Twips(0)
+    p3.paragraph_format.space_after = Twips(0)
+    run = p3.add_run("Approved by AICTE | Affiliated to Osmania University | Estd. 2003.")
     run.font.name = 'Times New Roman'
     run.font.size = Pt(10)
-    run = header_para.add_run("Accredited with 'A' grade by NAAC | Accredited by NBA\n")
+    
+    # Line 4: NAAC
+    p4 = text_cell.add_paragraph()
+    p4.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p4.paragraph_format.space_before = Twips(0)
+    p4.paragraph_format.space_after = Twips(0)
+    run = p4.add_run("Accredited with 'A' grade by NAAC | Accredited by NBA")
     run.font.name = 'Times New Roman'
     run.font.size = Pt(10)
-    run = header_para.add_run(f"DEPARTMENT OF {department_name.upper()}\n")
+    
+    # Line 5: Department
+    p5 = text_cell.add_paragraph()
+    p5.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p5.paragraph_format.space_before = Twips(0)
+    p5.paragraph_format.space_after = Twips(0)
+    run = p5.add_run(f"Department of {department_name}")
     run.font.name = 'Times New Roman'
     run.font.size = Pt(12)
     run.font.bold = True
@@ -96,7 +165,7 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
         section.right_margin = Inches(0.5)
     add_logo_and_header(doc, department_name)
     date_para = doc.add_paragraph()
-    date_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    date_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
     date_run = date_para.add_run(f"Date: {report_date}")
     date_run.font.name = 'Times New Roman'
     date_run.font.size = Pt(10)
@@ -332,9 +401,10 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                 if semester_match:
                     semester_num = semester_map.get(semester_match.group(1), 4)
                 
-                # Generate columns: Sem 1 to Sem (current-1) + Remarks
+                # Generate columns with Roman numerals: I Sem., II Sem., ... + Remarks
+                roman_numerals = {1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII'}
                 num_prev_semesters = max(1, semester_num - 1)
-                backlog_headers = [f'Sem {i}' for i in range(1, num_prev_semesters + 1)]
+                backlog_headers = [f'{roman_numerals.get(i, str(i))} Sem.' for i in range(1, num_prev_semesters + 1)]
                 backlog_headers.append('Remarks by Head of the Department')
                 
                 num_cols = len(backlog_headers)
@@ -391,7 +461,8 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 doc.add_paragraph()
                 signature_para = doc.add_paragraph()
-                signature_text = "Sign. of the student: ____________________   Sign. of the Parent/Guardian: ____________________"
+                signature_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                signature_text = "Sign. of the student: _______________________Sign. of the Parent/Guardian: _________________________"
                 signature_run = signature_para.add_run(signature_text)
                 signature_run.font.name = 'Times New Roman'
                 signature_run.font.size = Pt(9)
@@ -438,7 +509,7 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
         if student_complete_data['subjects']:
             add_logo_and_header(doc, department_name)
             date_para = doc.add_paragraph()
-            date_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+            date_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
             date_run = date_para.add_run(f"Date: {report_date}")
             date_run.font.name = 'Times New Roman'
             date_run.font.size = Pt(10)
@@ -662,9 +733,10 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                     if semester_match:
                         semester_num = semester_map.get(semester_match.group(1), 4)
                     
-                    # Generate columns: Sem 1 to Sem (current-1) + Remarks
+                    # Generate columns with Roman numerals: I Sem., II Sem., ... + Remarks
+                    roman_numerals = {1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V', 6: 'VI', 7: 'VII', 8: 'VIII'}
                     num_prev_semesters = max(1, semester_num - 1)
-                    backlog_headers = [f'Sem {i}' for i in range(1, num_prev_semesters + 1)]
+                    backlog_headers = [f'{roman_numerals.get(i, str(i))} Sem.' for i in range(1, num_prev_semesters + 1)]
                     backlog_headers.append('Remarks by Head of the Department')
                     
                     num_cols = len(backlog_headers)
@@ -721,7 +793,8 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 doc.add_paragraph()
                 signature_para = doc.add_paragraph()
-                signature_text = "Sign. of the student: ________________    Sign. of the Parent/Guardian: ________________"
+                signature_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                signature_text = "Sign. of the student: _______________________Sign. of the Parent/Guardian: _________________________"
                 signature_run = signature_para.add_run(signature_text)
                 signature_run.font.name = 'Times New Roman'
                 signature_run.font.size = Pt(9)
