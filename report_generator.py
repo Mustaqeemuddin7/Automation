@@ -6,6 +6,7 @@ from io import BytesIO
 import concurrent.futures
 import streamlit as st
 from docx.enum.text import WD_BREAK
+import pandas as pd
 
 def add_logo_and_header(doc, department_name):
     """Add institutional header to document with correct font and sizes"""
@@ -29,12 +30,38 @@ def add_logo_and_header(doc, department_name):
     run.font.size = Pt(12)
     run.font.bold = True
 
-def get_student_complete_data(student_roll, subjects_data):
-    """Get complete data for a student across all subjects"""
+def get_student_complete_data(student_roll, subjects_data, backlog_data=None):
+    """Get complete data for a student across all subjects.
+    Father name is fetched from backlog_data if available."""
     student_complete_data = {
         'personal_info': {},
         'subjects': []
     }
+    
+    # Try to get father_name and student_name from backlog data
+    father_name = ''
+    student_name_from_backlog = ''
+    if backlog_data is not None:
+        # Find roll column in backlog data
+        roll_col = None
+        for col in ['roll_no', 'roll no', 'rollno']:
+            if col in backlog_data.columns:
+                roll_col = col
+                break
+        if roll_col:
+            student_backlog = backlog_data[backlog_data[roll_col] == student_roll]
+            if not student_backlog.empty:
+                # Get father_name
+                for col in ['father_name', 'father name', 'fathername']:
+                    if col in student_backlog.columns:
+                        father_name = student_backlog.iloc[0][col]
+                        break
+                # Get student_name from backlog if available
+                for col in ['student_name', 'student name', 'name']:
+                    if col in student_backlog.columns:
+                        student_name_from_backlog = student_backlog.iloc[0][col]
+                        break
+    
     for subject_name, subject_df in subjects_data.items():
         student_data = subject_df[subject_df['roll_no'] == student_roll]
         if not student_data.empty:
@@ -42,8 +69,8 @@ def get_student_complete_data(student_roll, subjects_data):
             if not student_complete_data['personal_info']:
                 student_complete_data['personal_info'] = {
                     'roll_no': student_info['roll_no'],
-                    'student_name': student_info['student_name'],
-                    'father_name': student_info['father_name']
+                    'student_name': student_name_from_backlog if student_name_from_backlog else student_info.get('student_name', ''),
+                    'father_name': father_name if father_name else student_info.get('father_name', '')
                 }
             subject_data = {
                 'subject_name': subject_name,
@@ -58,7 +85,7 @@ def get_student_complete_data(student_roll, subjects_data):
             student_complete_data['subjects'].append(subject_data)
     return student_complete_data
 
-def create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True):
+def create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True, backlog_data=None):
     """Create a comprehensive Word document report for a student with customizable template"""
     doc = Document()
     sections = doc.sections
@@ -241,30 +268,28 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                         run.font.bold = True
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-        # Enforce compact widths after table is complete to match reference image
+        # Enforce compact widths after table is complete to match reference document
+        # Column widths in EMUs (exact values from correct format.docx)
+        from docx.shared import Emu
         try:
             table.autofit = False
-            # Set specific column widths as per specifications
-            table.columns[0].width = Inches(0.1)  # S.No. = 0.1 cm
-            table.columns[1].width = Inches(0.3)  # Course Title = 3 times S.No. (0.3 cm)
-            table.columns[2].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
-            table.columns[3].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
-            # CIE-1 Marks columns = 5 times S.No. (0.5 cm)
-            table.columns[4].width = Inches(0.5)  # DT (20)
-            table.columns[5].width = Inches(0.5)  # ST (10)
-            table.columns[6].width = Inches(0.5)  # AT (10)
-            table.columns[7].width = Inches(0.5)  # Total (40)
+            col_widths = [
+                Emu(447040),    # S.No.
+                Emu(1620520),   # Course Title
+                Emu(1350010),   # Attendance Conducted
+                Emu(1259840),   # Attendance Attended
+                Emu(540385),    # DT (20)
+                Emu(539750),    # ST (10)
+                Emu(540385),    # AT (10)
+                Emu(560070),    # Total (40)
+            ]
+            # Apply widths to each cell in every row for consistency
+            for row in table.rows:
+                for i, cell in enumerate(row.cells):
+                    if i < len(col_widths):
+                        cell.width = col_widths[i]
         except Exception:
-            # Fallback for individual cell width setting
-            for r in table.rows:
-                r.cells[0].width = Inches(0.1)  # S.No. = 0.1 cm
-                r.cells[1].width = Inches(0.3)  # Course Title = 3 times S.No. (0.3 cm)
-                r.cells[2].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
-                r.cells[3].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
-                r.cells[4].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
-                r.cells[5].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
-                r.cells[6].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
-                r.cells[7].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
+            pass  # Allow auto-fit if width setting fails
         if template == "Detailed":
             legend_para = doc.add_paragraph()
             legend_text = "*DT – Descriptive Test  ST-Surprise Test  AT- Assignment"
@@ -298,9 +323,23 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                 backlog_run.font.name = 'Times New Roman'
                 backlog_run.font.size = Pt(10)
                 backlog_run.font.bold = True
-                backlog_table = doc.add_table(rows=2, cols=4)
+                
+                # Parse semester number from semester string (e.g., "B.E- IV Semester" → 4)
+                import re
+                semester_map = {'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6, 'VII': 7, 'VIII': 8}
+                semester_num = 4  # Default to 4th semester
+                semester_match = re.search(r'\b(VIII|VII|VI|V|IV|III|II|I)\b', semester)
+                if semester_match:
+                    semester_num = semester_map.get(semester_match.group(1), 4)
+                
+                # Generate columns: Sem 1 to Sem (current-1) + Remarks
+                num_prev_semesters = max(1, semester_num - 1)
+                backlog_headers = [f'Sem {i}' for i in range(1, num_prev_semesters + 1)]
+                backlog_headers.append('Remarks by Head of the Department')
+                
+                num_cols = len(backlog_headers)
+                backlog_table = doc.add_table(rows=2, cols=num_cols)
                 backlog_table.style = 'Table Grid'
-                backlog_headers = ['I Sem.', 'II Sem.', 'III Sem.', 'Remarks by Head of the Department']
                 backlog_hdr_cells = backlog_table.rows[0].cells
                 for i, header in enumerate(backlog_headers):
                     backlog_hdr_cells[i].text = header
@@ -311,8 +350,40 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                             run.font.size = Pt(9)
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 backlog_data_cells = backlog_table.rows[1].cells
-                for cell in backlog_data_cells:
-                    cell.text = '-'
+                
+                # Get student's backlog data if available
+                student_roll = student_complete_data['personal_info']['roll_no']
+                student_backlog = None
+                if backlog_data is not None:
+                    # Try to find student in backlog data (check for roll_no or roll no column)
+                    roll_col = None
+                    for col in ['roll_no', 'roll no', 'rollno']:
+                        if col in backlog_data.columns:
+                            roll_col = col
+                            break
+                    if roll_col:
+                        student_backlog_row = backlog_data[backlog_data[roll_col] == student_roll]
+                        if not student_backlog_row.empty:
+                            student_backlog = student_backlog_row.iloc[0]
+                
+                # Fill in backlog data cells
+                for i, cell in enumerate(backlog_data_cells):
+                    if i < num_prev_semesters:  # Semester columns
+                        # Try multiple column name formats (case-insensitive)
+                        sem_num = i + 1
+                        possible_col_names = [f'sem {sem_num}', f'sem{sem_num}', f'Sem {sem_num}', f'Sem{sem_num}']
+                        cell_value = None
+                        if student_backlog is not None:
+                            for col_name in possible_col_names:
+                                if col_name in student_backlog.index:
+                                    cell_value = student_backlog[col_name]
+                                    break
+                        if cell_value is not None and pd.notna(cell_value):
+                            cell.text = str(cell_value)
+                        else:
+                            cell.text = '-'
+                    else:  # Remarks column (last column)
+                        cell.text = '-'
                     for paragraph in cell.paragraphs:
                         for run in paragraph.runs:
                             run.font.name = 'Times New Roman'
@@ -337,12 +408,12 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                 hod_run.font.size = Pt(9)
     return doc
 
-def generate_student_reports(student_roll, subjects_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True):
+def generate_student_reports(student_roll, subjects_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True, backlog_data=None):
     """Generate a comprehensive report for a single student in Word format"""
     student_complete_data = get_student_complete_data(student_roll, subjects_data)
     if not student_complete_data['subjects']:
         return {}
-    doc = create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, attendance_start, attendance_end, template, include_backlog, include_notes)
+    doc = create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, attendance_start, attendance_end, template, include_backlog, include_notes, backlog_data)
     doc_buffer = BytesIO()
     doc.save(doc_buffer)
     doc_buffer.seek(0)
@@ -351,7 +422,7 @@ def generate_student_reports(student_roll, subjects_data, department_name, repor
         f"{student_name}_Comprehensive_Report_docx": doc_buffer.getvalue()
     }
 
-def create_consolidated_all_students_report(all_students_data, subjects_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True):
+def create_consolidated_all_students_report(all_students_data, subjects_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True, backlog_data=None):
     """Create a single Word document containing all student reports, each on a separate page"""
     doc = Document()
     sections = doc.sections
@@ -527,30 +598,28 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                             run.font.bold = True
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
-            # Enforce compact widths at the end to match reference image
+            # Enforce compact widths at the end to match reference document
+            # Column widths in EMUs (exact values from correct format.docx)
+            from docx.shared import Emu
             try:
                 table.autofit = False
-                # Set specific column widths as per specifications
-                table.columns[0].width = Inches(0.1)  # S.No. = 0.1 cm
-                table.columns[1].width = Inches(0.3)  # Course Title = 3 times S.No. (0.3 cm)
-                table.columns[2].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
-                table.columns[3].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
-                # CIE-1 Marks columns = 5 times S.No. (0.5 cm)
-                table.columns[4].width = Inches(0.5)  # DT (20)
-                table.columns[5].width = Inches(0.5)  # ST (10)
-                table.columns[6].width = Inches(0.5)  # AT (10)
-                table.columns[7].width = Inches(0.5)  # Total (40)
+                col_widths = [
+                    Emu(447040),    # S.No.
+                    Emu(1620520),   # Course Title
+                    Emu(1350010),   # Attendance Conducted
+                    Emu(1259840),   # Attendance Attended
+                    Emu(540385),    # DT (20)
+                    Emu(539750),    # ST (10)
+                    Emu(540385),    # AT (10)
+                    Emu(560070),    # Total (40)
+                ]
+                # Apply widths to each cell in every row for consistency
+                for row in table.rows:
+                    for i, cell in enumerate(row.cells):
+                        if i < len(col_widths):
+                            cell.width = col_widths[i]
             except Exception:
-                # Fallback for individual cell width setting
-                for r in table.rows:
-                    r.cells[0].width = Inches(0.1)  # S.No. = 0.1 cm
-                    r.cells[1].width = Inches(0.3)  # Course Title = 3 times S.No. (0.3 cm)
-                    r.cells[2].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
-                    r.cells[3].width = Inches(0.5)  # Attendance = 5 times S.No. (0.5 cm)
-                    r.cells[4].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
-                    r.cells[5].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
-                    r.cells[6].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
-                    r.cells[7].width = Inches(0.5)  # CIE-1 Marks = 5 times S.No. (0.5 cm)
+                pass  # Allow auto-fit if width setting fails
             if template == "Detailed":
                 legend_para = doc.add_paragraph()
                 legend_text = "*DT – Descriptive Test  ST-Surprise Test  AT- Assignment"
@@ -584,9 +653,23 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                     backlog_run.font.name = 'Times New Roman'
                     backlog_run.font.size = Pt(10)
                     backlog_run.font.bold = True
-                    backlog_table = doc.add_table(rows=2, cols=4)
+                    
+                    # Parse semester number from semester string (e.g., "B.E- IV Semester" → 4)
+                    import re
+                    semester_map = {'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6, 'VII': 7, 'VIII': 8}
+                    semester_num = 4  # Default to 4th semester
+                    semester_match = re.search(r'\b(VIII|VII|VI|V|IV|III|II|I)\b', semester)
+                    if semester_match:
+                        semester_num = semester_map.get(semester_match.group(1), 4)
+                    
+                    # Generate columns: Sem 1 to Sem (current-1) + Remarks
+                    num_prev_semesters = max(1, semester_num - 1)
+                    backlog_headers = [f'Sem {i}' for i in range(1, num_prev_semesters + 1)]
+                    backlog_headers.append('Remarks by Head of the Department')
+                    
+                    num_cols = len(backlog_headers)
+                    backlog_table = doc.add_table(rows=2, cols=num_cols)
                     backlog_table.style = 'Table Grid'
-                    backlog_headers = ['I Sem.', 'II Sem.', 'III Sem.', 'Remarks by Head of the Department']
                     backlog_hdr_cells = backlog_table.rows[0].cells
                     for i, header in enumerate(backlog_headers):
                         backlog_hdr_cells[i].text = header
@@ -597,8 +680,40 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                                 run.font.size = Pt(9)
                             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     backlog_data_cells = backlog_table.rows[1].cells
-                    for cell in backlog_data_cells:
-                        cell.text = "-"
+                    
+                    # Get student's backlog data if available
+                    student_roll = student_complete_data['personal_info']['roll_no']
+                    student_backlog = None
+                    if backlog_data is not None:
+                        # Try to find student in backlog data (check for roll_no or roll no column)
+                        roll_col = None
+                        for col in ['roll_no', 'roll no', 'rollno']:
+                            if col in backlog_data.columns:
+                                roll_col = col
+                                break
+                        if roll_col:
+                            student_backlog_row = backlog_data[backlog_data[roll_col] == student_roll]
+                            if not student_backlog_row.empty:
+                                student_backlog = student_backlog_row.iloc[0]
+                    
+                    # Fill in backlog data cells
+                    for i, cell in enumerate(backlog_data_cells):
+                        if i < num_prev_semesters:  # Semester columns
+                            # Try multiple column name formats (case-insensitive)
+                            sem_num = i + 1
+                            possible_col_names = [f'sem {sem_num}', f'sem{sem_num}', f'Sem {sem_num}', f'Sem{sem_num}']
+                            cell_value = None
+                            if student_backlog is not None:
+                                for col_name in possible_col_names:
+                                    if col_name in student_backlog.index:
+                                        cell_value = student_backlog[col_name]
+                                        break
+                            if cell_value is not None and pd.notna(cell_value):
+                                cell.text = str(cell_value)
+                            else:
+                                cell.text = '-'
+                        else:  # Remarks column (last column)
+                            cell.text = '-'
                         for paragraph in cell.paragraphs:
                             for run in paragraph.runs:
                                 run.font.name = 'Times New Roman'
@@ -623,12 +738,12 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                 hod_run.font.size = Pt(9)
     return doc
 
-def generate_comprehensive_reports(all_students, subjects_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True):
+def generate_comprehensive_reports(all_students, subjects_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True, backlog_data=None):
     """Generate comprehensive reports for all students in parallel"""
     individual_reports = {}
     with concurrent.futures.ThreadPoolExecutor() as executor:
         future_to_roll = {
-            executor.submit(generate_student_reports, roll, subjects_data, department_name, report_date, academic_year, semester, attendance_start, attendance_end, template, include_backlog, include_notes): roll
+            executor.submit(generate_student_reports, roll, subjects_data, department_name, report_date, academic_year, semester, attendance_start, attendance_end, template, include_backlog, include_notes, backlog_data): roll
             for roll in all_students
         }
         for future in concurrent.futures.as_completed(future_to_roll):
@@ -643,7 +758,7 @@ def generate_comprehensive_reports(all_students, subjects_data, department_name,
                     }
             except Exception as e:
                 st.error(f"Error generating report for {roll}: {str(e)}")
-    consolidated_doc = create_consolidated_all_students_report(all_students, subjects_data, department_name, report_date, academic_year, semester, attendance_start, attendance_end, template, include_backlog, include_notes)
+    consolidated_doc = create_consolidated_all_students_report(all_students, subjects_data, department_name, report_date, academic_year, semester, attendance_start, attendance_end, template, include_backlog, include_notes, backlog_data)
     consolidated_buffer = BytesIO()
     consolidated_doc.save(consolidated_buffer)
     consolidated_buffer.seek(0)

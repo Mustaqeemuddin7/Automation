@@ -11,8 +11,8 @@ from sample_data import create_sample_subject_data
 # Set page configuration
 st.set_page_config(**PAGE_CONFIG)
 
-# Load CSS
-with open("styles.css") as f:
+# Load CSS with UTF-8 encoding
+with open("styles.css", encoding="utf-8") as f:
     st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
 
 def main():
@@ -29,10 +29,14 @@ def main():
         "🏛️ Institute Info",
         "📁 Upload Subject Files",
         "📊 Preview Data",
-        "📋 Generate Enhanced Reports",
-        "📋 Features",
-        "📥 Sample Data"
+        "✏️ Edit Data",
+        "📋 Generate Reports",
+        "📥 Sample Data",
+        "📋 Features"
     ])
+    # Tab indices:
+    # 0 = Institute Info, 1 = Upload Subject Files, 2 = Preview Data
+    # 3 = Edit Data, 4 = Generate Reports, 5 = Sample Data, 6 = Features
 
     with tabs[0]:
         st.markdown("""
@@ -42,7 +46,7 @@ def main():
         </div>
         """, unsafe_allow_html=True)
 
-    with tabs[5]:
+    with tabs[6]:
         st.markdown("""
         <div class="tab-content">
             <div class="feature-card">
@@ -75,7 +79,8 @@ def main():
             "Upload Excel files (one per subject)",
             type=['xlsx', 'xls'],
             accept_multiple_files=True,
-            help="File names will be used as subject names"
+            help="File names will be used as subject names",
+            key="subject_files_uploader"
         )
         if uploaded_files:
             st.success(f"✅ {len(uploaded_files)} subject files uploaded successfully!")
@@ -84,15 +89,51 @@ def main():
             for i, subject in enumerate(subjects, 1):
                 st.write(f"{i}. {subject}")
             st.session_state['uploaded_files'] = uploaded_files
+        
+        st.markdown("---")
+        st.header("Upload Backlog Data (Optional)")
+        st.info("Upload an Excel file containing backlog data with columns: roll_no, student_name, father_name, sem 1, sem 2, ... (up to previous semester)")
+        backlog_file = st.file_uploader(
+            "Upload Backlog Data Excel file",
+            type=['xlsx', 'xls'],
+            accept_multiple_files=False,
+            help="Contains columns: roll_no, student_name, father_name, and semester backlog columns (sem 1, sem 2, etc.)",
+            key="backlog_file_uploader"
+        )
+        if backlog_file:
+            try:
+                backlog_df = pd.read_excel(backlog_file)
+                # Normalize column names
+                backlog_df.columns = [col.lower().strip() for col in backlog_df.columns]
+                st.success(f"✅ Backlog data uploaded successfully! ({len(backlog_df)} students)")
+                st.session_state['backlog_data'] = backlog_df
+                
+                # Show detected semester columns
+                sem_cols = [col for col in backlog_df.columns if col.startswith('sem')]
+                st.write(f"**Semester columns detected**: {', '.join(sem_cols) if sem_cols else 'None'}")
+                
+                with st.expander("Preview Backlog Data"):
+                    st.dataframe(backlog_df.head())
+            except Exception as e:
+                st.error(f"Error reading backlog file: {str(e)}")
 
     with tabs[2]:
         st.header("Data Preview & Validation")
         if 'uploaded_files' in st.session_state:
-            with st.spinner("Processing subject files..."):
-                subjects_data, all_students, error = process_subject_files(st.session_state['uploaded_files'])
-            if error:
-                st.error(f"Error processing files: {error}")
-            else:
+            # Use existing session_state data if available (preserves edits)
+            # Only reprocess if subjects_data doesn't exist yet
+            if 'subjects_data' not in st.session_state:
+                with st.spinner("Processing subject files..."):
+                    subjects_data, all_students, error = process_subject_files(st.session_state['uploaded_files'])
+                if error:
+                    st.error(f"Error processing files: {error}")
+                else:
+                    st.session_state['subjects_data'] = subjects_data
+                    st.session_state['all_students'] = all_students
+            
+            if 'subjects_data' in st.session_state:
+                subjects_data = st.session_state['subjects_data']
+                all_students = st.session_state['all_students']
                 st.success("✅ Subject data processed successfully!")
                 col1, col2, col3, col4 = st.columns(4)
                 with col1:
@@ -107,19 +148,184 @@ def main():
                 st.subheader("Subject-wise Data Preview")
                 for subject_name, subject_df in subjects_data.items():
                     with st.expander(f"📚 {subject_name} ({len(subject_df)} students)"):
-                        st.dataframe(subject_df)            # default responsive width
+                        # For lab files, hide irrelevant marks columns
+                        is_lab = subject_df['is_lab'].iloc[0] if 'is_lab' in subject_df.columns and len(subject_df) > 0 else False
+                        if is_lab:
+                            # Filter out marks columns and is_lab for lab files
+                            display_cols = [col for col in subject_df.columns if col not in ['dt_marks', 'st_marks', 'at_marks', 'total_marks', 'is_lab']]
+                            st.dataframe(subject_df[display_cols])
+                        else:
+                            # For theory files, hide is_lab column only
+                            display_cols = [col for col in subject_df.columns if col != 'is_lab']
+                            st.dataframe(subject_df[display_cols])
                        
                         st.write("**Required Columns Present (after mapping)**:")
                         required_cols = list(COLUMN_MAPPINGS.keys())
                         for col in required_cols:
                             status = "✅" if col in subject_df.columns else "❌"
                             st.write(f"{status} {col}")
-                st.session_state['subjects_data'] = subjects_data
-                st.session_state['all_students'] = all_students
+                
+                # Option to reprocess files (clear edits)
+                if st.button("🔄 Reprocess Files (clears any edits)"):
+                    del st.session_state['subjects_data']
+                    del st.session_state['all_students']
+                    process_subject_files.clear()
+                    st.rerun()
+                
+                # Backlog Data Preview
+                if 'backlog_data' in st.session_state:
+                    st.subheader("📋 Backlog Data Preview")
+                    backlog_df = st.session_state['backlog_data']
+                    with st.expander(f"📋 Backlog Data ({len(backlog_df)} students)", expanded=False):
+                        st.dataframe(backlog_df)
+                        sem_cols = [col for col in backlog_df.columns if col.startswith('sem')]
+                        st.write(f"**Semester columns detected**: {', '.join(sem_cols) if sem_cols else 'None'}")
         else:
             st.warning("Please upload subject Excel files in the 'Upload Subject Files' tab first.")
 
+    # Tab 3: Edit Data (separate tab)
     with tabs[3]:
+        st.header("✏️ Edit Student & Backlog Data")
+        if 'subjects_data' in st.session_state:
+            subjects_data = st.session_state['subjects_data']
+            all_students = st.session_state['all_students']
+            backlog_data = st.session_state.get('backlog_data', None)
+            
+            st.subheader("📝 Edit Subject Data")
+            st.info("Edit marks and attendance for each student's subjects. Student name and father name are managed in the backlog file.")
+            edit_student = st.selectbox("Select student to edit:", options=[""] + all_students, key="edit_student_select")
+            if edit_student:
+                student_data = get_student_complete_data(edit_student, subjects_data, backlog_data)
+                with st.form(key=f"edit_form_{edit_student}"):
+                    st.write(f"**Editing data for: {student_data['personal_info']['student_name']} ({edit_student})**")
+                    st.write(f"Father's Name: {student_data['personal_info']['father_name']}")
+                    
+                    # Edit student_name in subject files
+                    new_student_name = st.text_input("Student Name (in subject files)", value=student_data['personal_info']['student_name'])
+                    
+                    updated_subjects = []
+                    for subject in student_data['subjects']:
+                        st.subheader(f"Subject: {subject['subject_name']}")
+                        is_lab = subject.get('is_lab', False)
+                        
+                        if not is_lab:
+                            dt_marks = st.number_input(f"DT Marks (out of 30) - {subject['subject_name']}", min_value=0, max_value=30, value=int(subject['dt_marks']), step=1)
+                            st_marks = st.number_input(f"ST Marks (out of 10) - {subject['subject_name']}", min_value=0, max_value=10, value=int(subject['st_marks']), step=1)
+                            at_marks = st.number_input(f"AT Marks (out of 10) - {subject['subject_name']}", min_value=0, max_value=10, value=int(subject['at_marks']), step=1)
+                            total_marks = dt_marks + st_marks + at_marks
+                        else:
+                            dt_marks = st_marks = at_marks = total_marks = 0
+                            st.caption("(Lab subject - no marks)")
+                        
+                        attendance_conducted = st.number_input(f"Attendance Conducted - {subject['subject_name']}", min_value=0, value=int(subject['attendance_conducted']), step=1)
+                        attendance_present = st.number_input(f"Attendance Present - {subject['subject_name']}", min_value=0, max_value=attendance_conducted if attendance_conducted > 0 else 9999, value=int(subject['attendance_present']), step=1)
+                        updated_subjects.append({
+                            'subject_name': subject['subject_name'],
+                            'dt_marks': dt_marks,
+                            'st_marks': st_marks,
+                            'at_marks': at_marks,
+                            'total_marks': total_marks,
+                            'attendance_conducted': attendance_conducted,
+                            'attendance_present': attendance_present
+                        })
+                    if st.form_submit_button("💾 Save Subject Changes"):
+                        for subject in updated_subjects:
+                            subject_name = subject['subject_name']
+                            student_idx = subjects_data[subject_name][subjects_data[subject_name]['roll_no'] == edit_student].index
+                            if not student_idx.empty:
+                                subjects_data[subject_name].loc[student_idx, 'student_name'] = new_student_name
+                                subjects_data[subject_name].loc[student_idx, 'dt_marks'] = subject['dt_marks']
+                                subjects_data[subject_name].loc[student_idx, 'st_marks'] = subject['st_marks']
+                                subjects_data[subject_name].loc[student_idx, 'at_marks'] = subject['at_marks']
+                                subjects_data[subject_name].loc[student_idx, 'total_marks'] = subject['total_marks']
+                                subjects_data[subject_name].loc[student_idx, 'attendance_conducted'] = subject['attendance_conducted']
+                                subjects_data[subject_name].loc[student_idx, 'attendance_present'] = subject['attendance_present']
+                        st.session_state['subjects_data'] = subjects_data
+                        process_subject_files.clear()
+                        st.success(f"✅ Updated subject data for {new_student_name} ({edit_student})")
+                        st.rerun()
+            
+            st.markdown("---")
+            
+            # Backlog Data Edit Section
+            st.subheader("📋 Edit Backlog Data")
+            if 'backlog_data' in st.session_state:
+                backlog_df = st.session_state['backlog_data']
+                st.info("Edit student info (name, father name) and backlog subjects here.")
+                
+                # Find roll column
+                roll_col = None
+                for col in ['roll_no', 'roll no', 'rollno']:
+                    if col in backlog_df.columns:
+                        roll_col = col
+                        break
+                
+                if roll_col:
+                    edit_backlog_student = st.selectbox(
+                        "Select student to edit backlog:",
+                        options=backlog_df[roll_col].tolist(),
+                        key="edit_backlog_student"
+                    )
+                    
+                    # Get semester columns
+                    sem_cols = sorted([col for col in backlog_df.columns if col.startswith('sem')])
+                    
+                    with st.form("edit_backlog_form"):
+                        st.write(f"**Editing backlog for: {edit_backlog_student}**")
+                        
+                        student_row = backlog_df[backlog_df[roll_col] == edit_backlog_student]
+                        if not student_row.empty:
+                            # Edit student name and father name
+                            current_student_name = ''
+                            current_father_name = ''
+                            for col in ['student_name', 'student name', 'name']:
+                                if col in student_row.columns:
+                                    current_student_name = str(student_row.iloc[0][col]) if pd.notna(student_row.iloc[0][col]) else ''
+                                    break
+                            for col in ['father_name', 'father name', 'fathername']:
+                                if col in student_row.columns:
+                                    current_father_name = str(student_row.iloc[0][col]) if pd.notna(student_row.iloc[0][col]) else ''
+                                    break
+                            
+                            new_backlog_student_name = st.text_input("Student Name", value=current_student_name, key="backlog_student_name")
+                            new_backlog_father_name = st.text_input("Father Name", value=current_father_name, key="backlog_father_name")
+                            
+                            st.markdown("**Semester Backlogs:**")
+                            updated_backlog = {}
+                            for sem_col in sem_cols:
+                                current_val = student_row.iloc[0][sem_col] if sem_col in student_row.columns else ''
+                                current_val = str(current_val) if pd.notna(current_val) else ''
+                                updated_backlog[sem_col] = st.text_input(
+                                    f"{sem_col.upper()} Backlogs (comma-separated subjects):",
+                                    value=current_val,
+                                    key=f"backlog_{sem_col}"
+                                )
+                            
+                            if st.form_submit_button("💾 Save Backlog Changes"):
+                                idx = backlog_df[backlog_df[roll_col] == edit_backlog_student].index
+                                # Update student name and father name
+                                for col in ['student_name', 'student name', 'name']:
+                                    if col in st.session_state['backlog_data'].columns:
+                                        st.session_state['backlog_data'].loc[idx, col] = new_backlog_student_name
+                                        break
+                                for col in ['father_name', 'father name', 'fathername']:
+                                    if col in st.session_state['backlog_data'].columns:
+                                        st.session_state['backlog_data'].loc[idx, col] = new_backlog_father_name
+                                        break
+                                # Update semester backlogs
+                                for sem_col, new_val in updated_backlog.items():
+                                    st.session_state['backlog_data'].loc[idx, sem_col] = new_val if new_val else None
+                                st.success(f"✅ Updated backlog data for {edit_backlog_student}")
+                                st.rerun()
+                else:
+                    st.warning("Backlog data doesn't have a roll_no column")
+            else:
+                st.warning("Please upload backlog data in the 'Upload Subject Files' tab to edit student and father names.")
+        else:
+            st.warning("Please process your subject data in the 'Preview Data' tab first.")
+    
+    # Tab 4: Generate Reports
+    with tabs[4]:
         st.header("🎓 Generate Institutional Progress Reports")
         if 'subjects_data' in st.session_state:
             subjects_data = st.session_state['subjects_data']
@@ -144,48 +350,7 @@ def main():
             if attendance_start and attendance_end:
                 st.session_state['attendance_start'] = attendance_start.strftime('%d-%m-%Y')
                 st.session_state['attendance_end'] = attendance_end.strftime('%d-%m-%Y')
-
-            st.subheader("✏️ Edit Student Data")
-            edit_student = st.selectbox("Select student to edit:", options=[""] + all_students, key="edit_student_select")
-            if edit_student:
-                student_data = get_student_complete_data(edit_student, subjects_data)
-                with st.form(key=f"edit_form_{edit_student}"):
-                    st.write(f"Editing data for {student_data['personal_info']['student_name']} ({edit_student})")
-                    new_student_name = st.text_input("Student Name", value=student_data['personal_info']['student_name'])
-                    new_father_name = st.text_input("Father Name", value=student_data['personal_info']['father_name'])
-                    updated_subjects = []
-                    for subject in student_data['subjects']:
-                        st.subheader(f"Subject: {subject['subject_name']}")
-                        dt_marks = st.number_input(f"DT Marks (out of 30) - {subject['subject_name']}", min_value=0, max_value=30, value=int(subject['dt_marks']), step=1)
-                        st_marks = st.number_input(f"ST Marks (out of 10) - {subject['subject_name']}", min_value=0, max_value=10, value=int(subject['st_marks']), step=1)
-                        at_marks = st.number_input(f"AT Marks (out of 10) - {subject['subject_name']}", min_value=0, max_value=10, value=int(subject['at_marks']), step=1)
-                        total_marks = dt_marks + st_marks + at_marks
-                        attendance_conducted = st.number_input(f"Attendance Conducted - {subject['subject_name']}", min_value=0, value=int(subject['attendance_conducted']), step=1)
-                        attendance_present = st.number_input(f"Attendance Present - {subject['subject_name']}", min_value=0, max_value=attendance_conducted, value=int(subject['attendance_present']), step=1)
-                        updated_subjects.append({
-                            'subject_name': subject['subject_name'],
-                            'dt_marks': dt_marks,
-                            'st_marks': st_marks,
-                            'at_marks': at_marks,
-                            'total_marks': total_marks,
-                            'attendance_conducted': attendance_conducted,
-                            'attendance_present': attendance_present
-                        })
-                    if st.form_submit_button("💾 Save Changes"):
-                        for subject in updated_subjects:
-                            subject_name = subject['subject_name']
-                            student_idx = subjects_data[subject_name][subjects_data[subject_name]['roll_no'] == edit_student].index
-                            if not student_idx.empty:
-                                subjects_data[subject_name].loc[student_idx, 'student_name'] = new_student_name
-                                subjects_data[subject_name].loc[student_idx, 'father_name'] = new_father_name
-                                subjects_data[subject_name].loc[student_idx, 'dt_marks'] = subject['dt_marks']
-                                subjects_data[subject_name].loc[student_idx, 'st_marks'] = subject['st_marks']
-                                subjects_data[subject_name].loc[student_idx, 'at_marks'] = subject['at_marks']
-                                subjects_data[subject_name].loc[student_idx, 'total_marks'] = subject['total_marks']
-                                subjects_data[subject_name].loc[student_idx, 'attendance_conducted'] = subject['attendance_conducted']
-                                subjects_data[subject_name].loc[student_idx, 'attendance_present'] = subject['attendance_present']
-                        st.session_state['subjects_data'] = subjects_data
-                        st.success(f"✅ Updated data for {new_student_name} ({edit_student})")
+            
             st.subheader("📄 Generate Reports")
             col1, col2 = st.columns([2, 1])
             with col1:
@@ -211,7 +376,8 @@ def main():
                             attendance_end=st.session_state.get('attendance_end', ''),
                             template="Detailed",
                             include_backlog=True,
-                            include_notes=True
+                            include_notes=True,
+                            backlog_data=st.session_state.get('backlog_data', None)
                         )
                         student_reports = {}
                         for i, student_roll in enumerate(students_to_process):
@@ -285,20 +451,26 @@ def main():
         else:
             st.warning("Please process your subject data in the 'Preview Data' tab first.")
 
-    with tabs[4]:
+    # Tab 5: Sample Data
+    with tabs[5]:
         st.header("Sample Data & Template")
         st.subheader("📋 Required Excel Format")
         st.markdown("""
-        **Required Columns for each subject file (case-insensitive variations accepted)**:
+        **Required Columns for each SUBJECT file (case-insensitive variations accepted)**:
         - `roll_no`: Student roll number (e.g., Roll No, Roll Number, RollNo)
         - `student_name`: Full name (e.g., Student Name, Name, Full Name)
-        - `father_name`: Father's name (e.g., Father Name, Father's Name)
-        - `dt_marks`: Descriptive Test marks (out of 30) (e.g., DT Marks, Descriptive Test)
-        - `st_marks`: Surprise Test marks (out of 10) (e.g., ST Marks, Surprise Test)
-        - `at_marks`: Assignment marks (out of 10) (e.g., AT Marks, Assignment Marks)
-        - `total_marks`: Total CIE-1 marks (out of 50) (e.g., Total Marks, Total)
+        - `dt_marks`: Descriptive Test marks (out of 30) - for theory subjects
+        - `st_marks`: Surprise Test marks (out of 10) - for theory subjects
+        - `at_marks`: Assignment marks (out of 10) - for theory subjects
+        - `total_marks`: Total CIE-1 marks (out of 50) - for theory subjects
         - `attendance_conducted`: Classes conducted (e.g., Attendance Conducted, Total Classes)
         - `attendance_present`: Classes attended (e.g., Attendance Present, Classes Attended)
+        
+        **Required Columns for BACKLOG file**:
+        - `roll_no`: Student roll number (primary key)
+        - `student_name`: Full name
+        - `father_name`: Father's name (required in backlog file)
+        - `sem 1`, `sem 2`, etc.: Semester-wise backlog subjects (comma-separated)
         """)
         st.subheader("📊 Sample Data")
         sample_subjects = create_sample_subject_data()

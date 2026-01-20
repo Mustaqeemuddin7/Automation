@@ -31,8 +31,8 @@ def process_subject_files(uploaded_files):
     try:
         subjects_data = {}
         all_students = set()
-        # Minimal required columns for any subject (lab or theory)
-        minimal_required = ['roll_no', 'student_name', 'father_name', 'attendance_conducted', 'attendance_present']
+        # Minimal required columns for any subject (lab or theory) - father_name now comes from backlog
+        minimal_required = ['roll_no', 'student_name', 'attendance_conducted', 'attendance_present']
         for file in uploaded_files:
             subject_name = file.name.split('.')[0]
             df = pd.read_excel(file)
