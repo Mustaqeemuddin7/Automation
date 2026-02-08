@@ -20,16 +20,23 @@ def add_logo_and_header(doc, department_name):
     header_table.alignment = WD_TABLE_ALIGNMENT.CENTER
     header_table.autofit = False
     
-    # Remove table borders first (invisible table)
+    # Remove table borders except bottom (add bottom border only)
     tbl = header_table._tbl
     tblPr = tbl.tblPr if tbl.tblPr is not None else OxmlElement('w:tblPr')
     tblBorders = OxmlElement('w:tblBorders')
-    for border_name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
+    for border_name in ['top', 'left', 'right', 'insideH', 'insideV']:
         border = OxmlElement(f'w:{border_name}')
         border.set(qn('w:val'), 'nil')
         border.set(qn('w:sz'), '0')
         border.set(qn('w:space'), '0')
         tblBorders.append(border)
+    # Add visible bottom border
+    bottom_border = OxmlElement('w:bottom')
+    bottom_border.set(qn('w:val'), 'single')
+    bottom_border.set(qn('w:sz'), '6')  # Border width
+    bottom_border.set(qn('w:space'), '0')
+    bottom_border.set(qn('w:color'), '000000')  # Black color
+    tblBorders.append(bottom_border)
     tblPr.append(tblBorders)
     if tbl.tblPr is None:
         tbl.insert(0, tblPr)
@@ -59,7 +66,7 @@ def add_logo_and_header(doc, department_name):
     p1.paragraph_format.space_after = Twips(0)
     run = p1.add_run("LORDS INSTITUTE OF ENGINEERING &TECHNOLOGY")
     run.font.name = 'Times New Roman'
-    run.font.size = Pt(14)
+    run.font.size = Pt(16)
     run.font.bold = True
     
     # Line 2: Autonomous
@@ -68,8 +75,8 @@ def add_logo_and_header(doc, department_name):
     p2.paragraph_format.space_before = Twips(0)
     p2.paragraph_format.space_after = Twips(0)
     run = p2.add_run("(Autonomous)")
-    run.font.name = 'Times New Roman'
-    run.font.size = Pt(10)
+    run.font.name = 'Aptos Display (Headings)'
+    run.font.size = Pt(14)
     
     # Line 3: AICTE
     p3 = text_cell.add_paragraph()
@@ -96,18 +103,19 @@ def add_logo_and_header(doc, department_name):
     p5.paragraph_format.space_after = Twips(0)
     run = p5.add_run(f"Department of {department_name}")
     run.font.name = 'Times New Roman'
-    run.font.size = Pt(12)
+    run.font.size = Pt(14)
     run.font.bold = True
 
 def get_student_complete_data(student_roll, subjects_data, backlog_data=None):
     """Get complete data for a student across all subjects.
-    Father name is fetched from backlog_data if available."""
+    Student name and father name are retrieved exclusively from Student Info file (backlog_data).
+    If student is not found in Student Info, these fields will be empty strings."""
     student_complete_data = {
         'personal_info': {},
         'subjects': []
     }
     
-    # Try to get father_name and student_name from backlog data
+    # Get student_name and father_name EXCLUSIVELY from Student Info file (backlog_data)
     father_name = ''
     student_name_from_backlog = ''
     if backlog_data is not None:
@@ -120,26 +128,32 @@ def get_student_complete_data(student_roll, subjects_data, backlog_data=None):
         if roll_col:
             student_backlog = backlog_data[backlog_data[roll_col] == student_roll]
             if not student_backlog.empty:
-                # Get father_name
+                # Get father_name from Student Info
                 for col in ['father_name', 'father name', 'fathername']:
                     if col in student_backlog.columns:
-                        father_name = student_backlog.iloc[0][col]
-                        break
-                # Get student_name from backlog if available
+                        val = student_backlog.iloc[0][col]
+                        if pd.notna(val) and str(val).strip():
+                            father_name = str(val).strip()
+                            break
+                # Get student_name from Student Info
                 for col in ['student_name', 'student name', 'name']:
                     if col in student_backlog.columns:
-                        student_name_from_backlog = student_backlog.iloc[0][col]
-                        break
+                        val = student_backlog.iloc[0][col]
+                        if pd.notna(val) and str(val).strip():
+                            student_name_from_backlog = str(val).strip()
+                            break
     
     for subject_name, subject_df in subjects_data.items():
         student_data = subject_df[subject_df['roll_no'] == student_roll]
         if not student_data.empty:
             student_info = student_data.iloc[0].to_dict()
             if not student_complete_data['personal_info']:
+                # Use student_name and father_name exclusively from Student Info file
+                # Fall back to roll number display if Student Info not available
                 student_complete_data['personal_info'] = {
                     'roll_no': student_info['roll_no'],
-                    'student_name': student_name_from_backlog if student_name_from_backlog else student_info.get('student_name', ''),
-                    'father_name': father_name if father_name else student_info.get('father_name', '')
+                    'student_name': student_name_from_backlog if student_name_from_backlog else f"Student {student_roll}",
+                    'father_name': father_name  # Will be empty if not in Student Info
                 }
             subject_data = {
                 'subject_name': subject_name,
@@ -156,38 +170,90 @@ def get_student_complete_data(student_roll, subjects_data, backlog_data=None):
 
 def create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True, backlog_data=None):
     """Create a comprehensive Word document report for a student with customizable template"""
+    from docx.shared import Twips
     doc = Document()
     sections = doc.sections
     for section in sections:
-        section.top_margin = Inches(0.5)
-        section.bottom_margin = Inches(0.5)
+        section.top_margin = Inches(0.1)    # Very small top margin like reference
+        section.bottom_margin = Inches(0.45)
         section.left_margin = Inches(0.5)
         section.right_margin = Inches(0.5)
     add_logo_and_header(doc, department_name)
+    
+    # Date line - right aligned
     date_para = doc.add_paragraph()
-    date_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    date_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     date_run = date_para.add_run(f"Date: {report_date}")
     date_run.font.name = 'Times New Roman'
-    date_run.font.size = Pt(10)
+    date_run.font.size = Pt(12)
+    date_run.font.bold = True
+    
     title_para = doc.add_paragraph()
     title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     title_run = title_para.add_run("Progress Report")
     title_run.font.name = 'Times New Roman'
-    title_run.font.size = Pt(14)
+    title_run.font.size = Pt(16)
     title_run.font.bold = True
     title_run.font.underline = True
+    
     personal_info = student_complete_data['personal_info']
-    details_para = doc.add_paragraph()
-    details_text = f"Academic Year: {academic_year}".ljust(60) + f"{semester}\n"
-    details_text += f"Roll No.              : {personal_info['roll_no']}\n"
-    details_text += f"Name of the Student : {personal_info['student_name']}\n"
-    details_text += f"Name of the Father   : {personal_info['father_name']}\n"
+    
+    # Academic Year line with semester right-aligned on same line
+    academic_para = doc.add_paragraph()
+    academic_run = academic_para.add_run(f"Academic Year: {academic_year}")
+    academic_run.font.name = 'Times New Roman'
+    academic_run.font.size = Pt(12)
+    academic_run.font.bold = True
+    # Add tab for right alignment of semester
+    academic_para.add_run("\t" * 8)
+    semester_run = academic_para.add_run(f"{semester}")
+    semester_run.font.name = 'Times New Roman'
+    semester_run.font.size = Pt(12)
+    semester_run.font.bold = True
+    
+    # Roll No line - bold
+    roll_para = doc.add_paragraph()
+    roll_para.paragraph_format.space_before = Pt(0)
+    roll_para.paragraph_format.space_after = Pt(0)
+    roll_run = roll_para.add_run(f"Roll No.              : {personal_info['roll_no']}")
+    roll_run.font.name = 'Times New Roman'
+    roll_run.font.size = Pt(12)
+    roll_run.font.bold = True
+    
+    # Student Name line - bold
+    name_para = doc.add_paragraph()
+    name_para.paragraph_format.space_before = Pt(0)
+    name_para.paragraph_format.space_after = Pt(0)
+    name_run = name_para.add_run(f"Name of the Student : {personal_info['student_name']}")
+    name_run.font.name = 'Times New Roman'
+    name_run.font.size = Pt(12)
+    name_run.font.bold = True
+    
+    # Father Name line - bold
+    father_para = doc.add_paragraph()
+    father_para.paragraph_format.space_before = Pt(0)
+    father_para.paragraph_format.space_after = Pt(0)
+    father_run = father_para.add_run(f"Name of the Father   : {personal_info['father_name']}")
+    father_run.font.name = 'Times New Roman'
+    father_run.font.size = Pt(12)
+    father_run.font.bold = True
+    
     if template == "Detailed":
-        details_text += "Dear Parent/Guardian,\n\n"
-        details_text += "The following are the details of the attendance and Continuous Internal Evaluation-1 of your ward. It is furnished for your information."
-    details_run = details_para.add_run(details_text)
-    details_run.font.name = 'Times New Roman'
-    details_run.font.size = Pt(10)
+        # Dear Parent/Guardian line - bold, NO blank line after
+        greeting_para = doc.add_paragraph()
+        greeting_para.paragraph_format.space_before = Pt(0)
+        greeting_para.paragraph_format.space_after = Pt(0)
+        greeting_run = greeting_para.add_run("Dear Parent/Guardian,")
+        greeting_run.font.name = 'Times New Roman'
+        greeting_run.font.size = Pt(12)
+        greeting_run.font.bold = True
+        
+        # Description text - regular
+        desc_para = doc.add_paragraph()
+        desc_para.paragraph_format.space_before = Pt(0)
+        desc_run = desc_para.add_run("The following are the details of the attendance and Continuous Internal Evaluation-1 of your ward. It is furnished for your information.")
+        desc_run.font.name = 'Times New Roman'
+        desc_run.font.size = Pt(12)
     subjects = student_complete_data['subjects']
     if subjects:
         # Create a two-row header with grouped columns like the reference image
@@ -231,7 +297,7 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                     for run in paragraph.runs:
                         run.font.name = 'Times New Roman'
                         run.font.bold = True
-                        run.font.size = Pt(9)
+                        run.font.size = Pt(12)
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         # We'll enforce S.No. width after the table is fully built
         # Use default auto-fit widths (restored)
@@ -255,7 +321,7 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                 at_marks = ''
                 total_marks = ''
             else:
-                dt_marks = subject['dt_marks'] * 20 / 30
+                dt_marks = subject['dt_marks'] * 20 / 20
                 st_marks = subject['st_marks']
                 at_marks = subject['at_marks']
                 total_marks = dt_marks + st_marks + at_marks
@@ -276,7 +342,7 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                     for paragraph in data_cells[i].paragraphs:
                         for run in paragraph.runs:
                             run.font.name = 'Times New Roman'
-                            run.font.size = Pt(9)
+                            run.font.size = Pt(12)
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             # For lab subjects, merge DT, ST, AT and Total cells into one and set a single '-'
             if is_lab:
@@ -289,7 +355,7 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                     for paragraph in merged.paragraphs:
                         for run in paragraph.runs:
                             run.font.name = 'Times New Roman'
-                            run.font.size = Pt(9)
+                            run.font.size = Pt(12)
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 except Exception:
                     pass
@@ -324,7 +390,7 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
             for p in merged_marks_cell.paragraphs:
                 for run in p.runs:
                     run.font.name = 'Times New Roman'
-                    run.font.size = Pt(9)
+                    run.font.size = Pt(12)
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         except Exception:
             pass
@@ -333,7 +399,7 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                 for paragraph in cell.paragraphs:
                     for run in paragraph.runs:
                         run.font.name = 'Times New Roman'
-                        run.font.size = Pt(9)
+                        run.font.size = Pt(12)
                         run.font.bold = True
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
@@ -359,38 +425,75 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                         cell.width = col_widths[i]
         except Exception:
             pass  # Allow auto-fit if width setting fails
+        
         if template == "Detailed":
+            # Legend - proper paragraph spacing
             legend_para = doc.add_paragraph()
+            legend_para.paragraph_format.space_before = Pt(0)
+            legend_para.paragraph_format.space_after = Pt(0)
             legend_text = "*DT – Descriptive Test  ST-Surprise Test  AT- Assignment"
             legend_run = legend_para.add_run(legend_text)
             legend_run.font.name = 'Times New Roman'
-            legend_run.font.size = Pt(9)
+            legend_run.font.size = Pt(12)
+            
+            # Attendance note - proper paragraph spacing
             attendance_note = doc.add_paragraph()
+            attendance_note.paragraph_format.space_before = Pt(0)
+            attendance_note.paragraph_format.space_after = Pt(0)
             attendance_status = "Poor" if overall_attendance_percent < 75 else "Satisfactory"
             note_text = f"Your ward's attendance is {overall_attendance_percent:.2f}% which is {attendance_status}."
             note_run = attendance_note.add_run(note_text)
             note_run.font.name = 'Times New Roman'
-            note_run.font.size = Pt(9)
-            note_run.font.bold = True
+            note_run.font.size = Pt(11)
+            note_run.font.bold = False
             if overall_attendance_percent < 75:
                 note_run.font.color.rgb = RGBColor(255, 0, 0)
+            
             if include_notes:
+                # Important Note: - with spacing_after = 0 and bold
                 important_para = doc.add_paragraph()
+                important_para.paragraph_format.space_after = Pt(0)
                 important_run = important_para.add_run("Important Note:")
                 important_run.font.name = 'Times New Roman'
-                important_run.font.size = Pt(10)
+                important_run.font.size = Pt(12)
                 important_run.font.bold = True
-                notes_text = "→ As per the Osmania University rules, a student must have minimum attendance of 75% in aggregate of all the subjects to be eligible or promoted for the next year. Students having less than 75% attendance in aggregate will not be issued Hall Ticket for the examination, such students will come under Condonation/Detention category.\n"
-                notes_text += "→ As per State Government rules, the student is not eligible for Scholarship if the attendance is less than 75%."
+                
+                # Notes paragraph with spacing_after = 0 and specific bold text
                 notes_para = doc.add_paragraph()
-                notes_run = notes_para.add_run(notes_text)
-                notes_run.font.name = 'Times New Roman'
-                notes_run.font.size = Pt(9)
+                notes_para.paragraph_format.space_after = Pt(0)
+                
+                # First part: "➤ As per the "
+                run1 = notes_para.add_run("     ➤ As per the ")
+                run1.font.name = 'Times New Roman'
+                run1.font.size = Pt(11)
+                
+                # "Osmania University" - bold
+                run2 = notes_para.add_run("Osmania University")
+                run2.font.name = 'Times New Roman'
+                run2.font.size = Pt(11)
+                run2.font.bold = True
+                
+                # Rest of first sentence
+                run3 = notes_para.add_run(" rules, a student must have minimum attendance of 75% in aggregate of all the subjects to be eligible or promoted for the next year. Students having less than 75% attendance in aggregate will not be issued Hall Ticket for the examination, such students will come under Condonation/Detention category.\n")
+                run3.font.name = 'Times New Roman'
+                run3.font.size = Pt(11)
+                
+                # Second sentence - bold
+                run4 = notes_para.add_run("     ➤ As per State Government rules, the student is not eligible for Scholarship if the attendance is less than 75%.")
+                run4.font.name = 'Times New Roman'
+                run4.font.size = Pt(11)
+                run4.font.bold = True
+            
             if include_backlog:
+                # Add empty line before backlog data
+                doc.add_paragraph()
+                
+                # Backlog Data: - with spacing_after = 0 and bold
                 backlog_para = doc.add_paragraph()
+                backlog_para.paragraph_format.space_after = Pt(0)
                 backlog_run = backlog_para.add_run("Backlog Data:")
                 backlog_run.font.name = 'Times New Roman'
-                backlog_run.font.size = Pt(10)
+                backlog_run.font.size = Pt(12)
                 backlog_run.font.bold = True
                 
                 # Parse semester number from semester string (e.g., "B.E- IV Semester" → 4)
@@ -410,6 +513,12 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                 num_cols = len(backlog_headers)
                 backlog_table = doc.add_table(rows=2, cols=num_cols)
                 backlog_table.style = 'Table Grid'
+                
+                # Set Remarks column (last column) width to 1.61 inches as per reference
+                # Other columns will auto-adjust
+                for row in backlog_table.rows:
+                    row.cells[num_cols - 1].width = Inches(1.61)
+                
                 backlog_hdr_cells = backlog_table.rows[0].cells
                 for i, header in enumerate(backlog_headers):
                     backlog_hdr_cells[i].text = header
@@ -417,7 +526,7 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                         for run in paragraph.runs:
                             run.font.name = 'Times New Roman'
                             run.font.bold = True
-                            run.font.size = Pt(9)
+                            run.font.size = Pt(12)
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 backlog_data_cells = backlog_table.rows[1].cells
                 
@@ -457,31 +566,25 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                     for paragraph in cell.paragraphs:
                         for run in paragraph.runs:
                             run.font.name = 'Times New Roman'
-                            run.font.size = Pt(9)
+                            run.font.size = Pt(12)
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                doc.add_paragraph()
-                signature_para = doc.add_paragraph()
-                signature_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                signature_text = "Sign. of the student: _______________________Sign. of the Parent/Guardian: _________________________"
-                signature_run = signature_para.add_run(signature_text)
-                signature_run.font.name = 'Times New Roman'
-                signature_run.font.size = Pt(9)
-                # doc.add_paragraph()
-                final_signature_para = doc.add_paragraph()
-                final_signature_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                mentor_run = final_signature_para.add_run("Mentor")
-                mentor_run.font.name = 'Times New Roman'
-                mentor_run.font.size = Pt(9)
-                spaces = " " * 60
-                final_signature_para.add_run(spaces)
-                hod_run = final_signature_para.add_run("Head of the Department")
-                hod_run.font.name = 'Times New Roman'
-                hod_run.font.size = Pt(9)
+            doc.add_paragraph()   
+            # Signature line - bold with proper spacing
+            signature_para = doc.add_paragraph()
+            signature_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            signature_para.paragraph_format.space_before = Pt(6)
+            signature_para.paragraph_format.space_after = Pt(6)
+            signature_text = "Sign. of the student: _______________________Sign. of the Parent/Guardian: _________________________"
+            signature_run = signature_para.add_run(signature_text)
+            signature_run.font.name = 'Times New Roman'
+            signature_run.font.size = Pt(11)
+            signature_run.font.bold = True
+          
     return doc
 
 def generate_student_reports(student_roll, subjects_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True, backlog_data=None):
     """Generate a comprehensive report for a single student in Word format"""
-    student_complete_data = get_student_complete_data(student_roll, subjects_data)
+    student_complete_data = get_student_complete_data(student_roll, subjects_data, backlog_data)
     if not student_complete_data['subjects']:
         return {}
     doc = create_comprehensive_student_report(student_complete_data, department_name, report_date, academic_year, semester, attendance_start, attendance_end, template, include_backlog, include_notes, backlog_data)
@@ -495,43 +598,95 @@ def generate_student_reports(student_roll, subjects_data, department_name, repor
 
 def create_consolidated_all_students_report(all_students_data, subjects_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True, backlog_data=None):
     """Create a single Word document containing all student reports, each on a separate page"""
+    from docx.shared import Twips
     doc = Document()
     sections = doc.sections
     for section in sections:
-        section.top_margin = Inches(0.5)
-        section.bottom_margin = Inches(0.5)
+        section.top_margin = Inches(0.1)    # Very small top margin like reference
+        section.bottom_margin = Inches(0.45)
         section.left_margin = Inches(0.5)
         section.right_margin = Inches(0.5)
     for idx, student_roll in enumerate(all_students_data):
         if idx > 0:
             doc.add_page_break()
-        student_complete_data = get_student_complete_data(student_roll, subjects_data)
+        student_complete_data = get_student_complete_data(student_roll, subjects_data, backlog_data)
         if student_complete_data['subjects']:
             add_logo_and_header(doc, department_name)
+            
+            # Date line - right aligned
             date_para = doc.add_paragraph()
-            date_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            date_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
             date_run = date_para.add_run(f"Date: {report_date}")
             date_run.font.name = 'Times New Roman'
-            date_run.font.size = Pt(10)
+            date_run.font.size = Pt(12)
+            date_run.font.bold = True
+            
             title_para = doc.add_paragraph()
             title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
             title_run = title_para.add_run("Progress Report")
             title_run.font.name = 'Times New Roman'
-            title_run.font.size = Pt(14)
+            title_run.font.size = Pt(16)
             title_run.font.bold = True
             title_run.font.underline = True
+            
             personal_info = student_complete_data['personal_info']
-            details_para = doc.add_paragraph()
-            details_text = f"Academic Year: {academic_year}".ljust(60) + f"{semester}\n"
-            details_text += f"Roll No.              : {personal_info['roll_no']}\n"
-            details_text += f"Name of the Student : {personal_info['student_name']}\n"
-            details_text += f"Name of the Father   : {personal_info['father_name']}\n"
+            
+            # Academic Year line with semester right-aligned on same line
+            academic_para = doc.add_paragraph()
+            academic_run = academic_para.add_run(f"Academic Year: {academic_year}")
+            academic_run.font.name = 'Times New Roman'
+            academic_run.font.size = Pt(12)
+            academic_run.font.bold = True
+            # Add tab for right alignment of semester
+            academic_para.add_run("\t" * 8)
+            semester_run = academic_para.add_run(f"{semester}")
+            semester_run.font.name = 'Times New Roman'
+            semester_run.font.size = Pt(12)
+            semester_run.font.bold = True
+            
+            # Roll No line - bold
+            roll_para = doc.add_paragraph()
+            roll_para.paragraph_format.space_before = Pt(0)
+            roll_para.paragraph_format.space_after = Pt(0)
+            roll_run = roll_para.add_run(f"Roll No.              : {personal_info['roll_no']}")
+            roll_run.font.name = 'Times New Roman'
+            roll_run.font.size = Pt(12)
+            roll_run.font.bold = True
+            
+            # Student Name line - bold
+            name_para = doc.add_paragraph()
+            name_para.paragraph_format.space_before = Pt(0)
+            name_para.paragraph_format.space_after = Pt(0)
+            name_run = name_para.add_run(f"Name of the Student : {personal_info['student_name']}")
+            name_run.font.name = 'Times New Roman'
+            name_run.font.size = Pt(12)
+            name_run.font.bold = True
+            
+            # Father Name line - bold
+            father_para = doc.add_paragraph()
+            father_para.paragraph_format.space_before = Pt(0)
+            father_para.paragraph_format.space_after = Pt(0)
+            father_run = father_para.add_run(f"Name of the Father   : {personal_info['father_name']}")
+            father_run.font.name = 'Times New Roman'
+            father_run.font.size = Pt(12)
+            father_run.font.bold = True
+            
             if template == "Detailed":
-                details_text += "Dear Parent/Guardian,\n\n"
-                details_text += "The following are the details of the attendance and Continuous Internal Evaluation-1 of your ward. It is furnished for your information."
-            details_run = details_para.add_run(details_text)
-            details_run.font.name = 'Times New Roman'
-            details_run.font.size = Pt(10)
+                # Dear Parent/Guardian line - bold, NO blank line after
+                greeting_para = doc.add_paragraph()
+                greeting_para.paragraph_format.space_before = Pt(0)
+                greeting_para.paragraph_format.space_after = Pt(0)
+                greeting_run = greeting_para.add_run("Dear Parent/Guardian,")
+                greeting_run.font.name = 'Times New Roman'
+                greeting_run.font.size = Pt(12)
+                greeting_run.font.bold = True
+                
+                # Description text - regular
+                desc_para = doc.add_paragraph()
+                desc_para.paragraph_format.space_before = Pt(0)
+                desc_run = desc_para.add_run("The following are the details of the attendance and Continuous Internal Evaluation-1 of your ward. It is furnished for your information.")
+                desc_run.font.name = 'Times New Roman'
+                desc_run.font.size = Pt(12)
             subjects = student_complete_data['subjects']
             # Two-row grouped header like the reference image
             table = doc.add_table(rows=2, cols=8)
@@ -569,7 +724,7 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                         for run in paragraph.runs:
                             run.font.name = 'Times New Roman'
                             run.font.bold = True
-                            run.font.size = Pt(9)
+                            run.font.size = Pt(12)
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             # Use default auto-fit widths (restored)
             total_attendance_conducted = 0
@@ -612,7 +767,7 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                         for paragraph in data_cells[i].paragraphs:
                             for run in paragraph.runs:
                                 run.font.name = 'Times New Roman'
-                                run.font.size = Pt(9)
+                                run.font.size = Pt(12)
                             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 if is_lab:
                     try:
@@ -623,7 +778,7 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                         for paragraph in merged.paragraphs:
                             for run in paragraph.runs:
                                 run.font.name = 'Times New Roman'
-                                run.font.size = Pt(9)
+                                run.font.size = Pt(12)
                             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     except Exception:
                         pass
@@ -656,7 +811,7 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                 for p in merged_marks_cell.paragraphs:
                     for run in p.runs:
                         run.font.name = 'Times New Roman'
-                        run.font.size = Pt(9)
+                        run.font.size = Pt(12)
                     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             except Exception:
                 pass
@@ -665,7 +820,7 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                     for paragraph in cell.paragraphs:
                         for run in paragraph.runs:
                             run.font.name = 'Times New Roman'
-                            run.font.size = Pt(9)
+                            run.font.size = Pt(12)
                             run.font.bold = True
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
@@ -691,38 +846,75 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                             cell.width = col_widths[i]
             except Exception:
                 pass  # Allow auto-fit if width setting fails
+            
             if template == "Detailed":
+                # Legend - proper paragraph spacing
                 legend_para = doc.add_paragraph()
+                legend_para.paragraph_format.space_before = Pt(0)
+                legend_para.paragraph_format.space_after = Pt(0)
                 legend_text = "*DT – Descriptive Test  ST-Surprise Test  AT- Assignment"
                 legend_run = legend_para.add_run(legend_text)
                 legend_run.font.name = 'Times New Roman'
-                legend_run.font.size = Pt(9)
+                legend_run.font.size = Pt(12)
+                
+                # Attendance note - proper paragraph spacing
                 attendance_note = doc.add_paragraph()
+                attendance_note.paragraph_format.space_before = Pt(0)
+                attendance_note.paragraph_format.space_after = Pt(0)
                 attendance_status = "Poor" if overall_attendance_percent < 75 else "Satisfactory"
                 note_text = f"Your ward's attendance is {overall_attendance_percent:.2f}% which is {attendance_status}."
                 note_run = attendance_note.add_run(note_text)
                 note_run.font.name = 'Times New Roman'
-                note_run.font.size = Pt(9)
-                note_run.font.bold = True
+                note_run.font.size = Pt(11)
+                note_run.font.bold = False
                 if overall_attendance_percent < 75:
                     note_run.font.color.rgb = RGBColor(255, 0, 0)
+                
                 if include_notes:
+                    # Important Note: - with spacing_after = 0 and bold
                     important_para = doc.add_paragraph()
+                    important_para.paragraph_format.space_after = Pt(0)
                     important_run = important_para.add_run("Important Note:")
                     important_run.font.name = 'Times New Roman'
-                    important_run.font.size = Pt(10)
+                    important_run.font.size = Pt(12)
                     important_run.font.bold = True
-                    notes_text = "→ As per the Osmania University rules, a student must have minimum attendance of 75% in aggregate of all the subjects to be eligible or promoted for the next year. Students having less than 75% attendance in aggregate will not be issued Hall Ticket for the examination, such students will come under Condonation/Detention category.\n"
-                    notes_text += "→ As per State Government rules, the student is not eligible for Scholarship if the attendance is less than 75%."
+                    
+                    # Notes paragraph with spacing_after = 0 and specific bold text
                     notes_para = doc.add_paragraph()
-                    notes_run = notes_para.add_run(notes_text)
-                    notes_run.font.name = 'Times New Roman'
-                    notes_run.font.size = Pt(9)
+                    notes_para.paragraph_format.space_after = Pt(0)
+                    
+                    # First part: "➤ As per the "
+                    run1 = notes_para.add_run("     ➤ As per the ")
+                    run1.font.name = 'Times New Roman'
+                    run1.font.size = Pt(11)
+                    
+                    # "Osmania University" - bold
+                    run2 = notes_para.add_run("Osmania University")
+                    run2.font.name = 'Times New Roman'
+                    run2.font.size = Pt(11)
+                    run2.font.bold = True
+                    
+                    # Rest of first sentence
+                    run3 = notes_para.add_run(" rules, a student must have minimum attendance of 75% in aggregate of all the subjects to be eligible or promoted for the next year. Students having less than 75% attendance in aggregate will not be issued Hall Ticket for the examination, such students will come under Condonation/Detention category.\n")
+                    run3.font.name = 'Times New Roman'
+                    run3.font.size = Pt(11)
+                    
+                    # Second sentence - bold
+                    run4 = notes_para.add_run("     ➤ As per State Government rules, the student is not eligible for Scholarship if the attendance is less than 75%.")
+                    run4.font.name = 'Times New Roman'
+                    run4.font.size = Pt(11)
+                    run4.font.bold = True
+                
                 if include_backlog:
+                    # Add empty line before backlog data
+                    
+                    
+                    # Backlog Data: - with spacing_after = 0 and bold
                     backlog_para = doc.add_paragraph()
+                    backlog_para.paragraph_format.space_after = Pt(0)
                     backlog_run = backlog_para.add_run("Backlog Data:")
                     backlog_run.font.name = 'Times New Roman'
-                    backlog_run.font.size = Pt(10)
+                    backlog_run.font.size = Pt(12)
                     backlog_run.font.bold = True
                     
                     # Parse semester number from semester string (e.g., "B.E- IV Semester" → 4)
@@ -742,6 +934,12 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                     num_cols = len(backlog_headers)
                     backlog_table = doc.add_table(rows=2, cols=num_cols)
                     backlog_table.style = 'Table Grid'
+                    
+                    # Set Remarks column (last column) width to 1.61 inches as per reference
+                    # Other columns will auto-adjust
+                    for row in backlog_table.rows:
+                        row.cells[num_cols - 1].width = Inches(1.61)
+                    
                     backlog_hdr_cells = backlog_table.rows[0].cells
                     for i, header in enumerate(backlog_headers):
                         backlog_hdr_cells[i].text = header
@@ -749,7 +947,7 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                             for run in paragraph.runs:
                                 run.font.name = 'Times New Roman'
                                 run.font.bold = True
-                                run.font.size = Pt(9)
+                                run.font.size = Pt(12)
                             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     backlog_data_cells = backlog_table.rows[1].cells
                     
@@ -789,26 +987,20 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                         for paragraph in cell.paragraphs:
                             for run in paragraph.runs:
                                 run.font.name = 'Times New Roman'
-                                run.font.size = Pt(9)
+                                run.font.size = Pt(12)
                             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                
                 doc.add_paragraph()
+                # Signature line - bold with proper spacing
                 signature_para = doc.add_paragraph()
-                signature_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                signature_para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                signature_para.paragraph_format.space_before = Pt(6)
+                signature_para.paragraph_format.space_after = Pt(6)
                 signature_text = "Sign. of the student: _______________________Sign. of the Parent/Guardian: _________________________"
-                signature_run = signature_para.add_run(signature_text)
+                signature_run = signature_para.add_run(signature_text)  
                 signature_run.font.name = 'Times New Roman'
-                signature_run.font.size = Pt(9)
-                # doc.add_paragraph()
-                final_signature_para = doc.add_paragraph()
-                final_signature_para.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-                mentor_run = final_signature_para.add_run("Mentor")
-                mentor_run.font.name = 'Times New Roman'
-                mentor_run.font.size = Pt(9)
-                spaces = " " * 60
-                final_signature_para.add_run(spaces)
-                hod_run = final_signature_para.add_run("Head of the Department")
-                hod_run.font.name = 'Times New Roman'
-                hod_run.font.size = Pt(9)
+                signature_run.font.size = Pt(11)
+                signature_run.font.bold = True
     return doc
 
 def generate_comprehensive_reports(all_students, subjects_data, department_name, report_date, academic_year, semester, attendance_start="", attendance_end="", template="Detailed", include_backlog=True, include_notes=True, backlog_data=None):

@@ -74,48 +74,51 @@ def main():
 
     with tabs[1]:
         st.header("Upload Subject Excel Files")
-        st.info("Upload multiple Excel files - each file name represents a subject (e.g., Mathematics.xlsx, Physics.xlsx)")
-        uploaded_files = st.file_uploader(
-            "Upload Excel files (one per subject)",
-            type=['xlsx', 'xls'],
-            accept_multiple_files=True,
-            help="File names will be used as subject names",
-            key="subject_files_uploader"
-        )
-        if uploaded_files:
-            st.success(f"✅ {len(uploaded_files)} subject files uploaded successfully!")
-            subjects = [f.name.split('.')[0] for f in uploaded_files]
-            st.write("**Subjects detected**:")
-            for i, subject in enumerate(subjects, 1):
-                st.write(f"{i}. {subject}")
-            st.session_state['uploaded_files'] = uploaded_files
         
-        st.markdown("---")
-        st.header("Upload Backlog Data (Optional)")
-        st.info("Upload an Excel file containing backlog data with columns: roll_no, student_name, father_name, sem 1, sem 2, ... (up to previous semester)")
-        backlog_file = st.file_uploader(
-            "Upload Backlog Data Excel file",
-            type=['xlsx', 'xls'],
-            accept_multiple_files=False,
-            help="Contains columns: roll_no, student_name, father_name, and semester backlog columns (sem 1, sem 2, etc.)",
-            key="backlog_file_uploader"
-        )
-        if backlog_file:
-            try:
-                backlog_df = pd.read_excel(backlog_file)
-                # Normalize column names
-                backlog_df.columns = [col.lower().strip() for col in backlog_df.columns]
-                st.success(f"✅ Backlog data uploaded successfully! ({len(backlog_df)} students)")
-                st.session_state['backlog_data'] = backlog_df
-                
-                # Show detected semester columns
-                sem_cols = [col for col in backlog_df.columns if col.startswith('sem')]
-                st.write(f"**Semester columns detected**: {', '.join(sem_cols) if sem_cols else 'None'}")
-                
-                with st.expander("Preview Backlog Data"):
-                    st.dataframe(backlog_df.head())
-            except Exception as e:
-                st.error(f"Error reading backlog file: {str(e)}")
+        # Create two columns for side-by-side upload sections
+        upload_col1, upload_col2 = st.columns(2)
+        
+        with upload_col1:
+            st.subheader("📁 Subject Files")
+            st.info("Upload multiple Excel files - each file name represents a subject (e.g., Mathematics.xlsx, Physics.xlsx)")
+            uploaded_files = st.file_uploader(
+                "Upload Excel files (one per subject)",
+                type=['xlsx', 'xls'],
+                accept_multiple_files=True,
+                help="File names will be used as subject names",
+                key="subject_files_uploader"
+            )
+            if uploaded_files:
+                st.success(f"✅ {len(uploaded_files)} subject files uploaded successfully!")
+                subjects = [f.name.split('.')[0] for f in uploaded_files]
+                st.write("**Subjects detected**:")
+                for i, subject in enumerate(subjects, 1):
+                    st.write(f"{i}. {subject}")
+                st.session_state['uploaded_files'] = uploaded_files
+        
+        with upload_col2:
+            st.subheader("📋 Student Info")
+            st.info("Upload an Excel file containing student info with columns: roll_no, student_name, father_name, sem 1, sem 2, ... (up to previous semester)")
+            backlog_file = st.file_uploader(
+                "Upload Student Info Excel file",
+                type=['xlsx', 'xls'],
+                accept_multiple_files=False,
+                help="Contains columns: roll_no, student_name, father_name, and semester backlog columns (sem 1, sem 2, etc.)",
+                key="backlog_file_uploader"
+            )
+            if backlog_file:
+                try:
+                    backlog_df = pd.read_excel(backlog_file)
+                    # Normalize column names
+                    backlog_df.columns = [col.lower().strip() for col in backlog_df.columns]
+                    st.success(f"✅ Student info uploaded successfully! ({len(backlog_df)} students)")
+                    st.session_state['backlog_data'] = backlog_df
+                    
+                    # Show detected semester columns
+                    sem_cols = [col for col in backlog_df.columns if col.startswith('sem')]
+                    st.write(f"**Semester columns detected**: {', '.join(sem_cols) if sem_cols else 'None'}")
+                except Exception as e:
+                    st.error(f"Error reading student info file: {str(e)}")
 
     with tabs[2]:
         st.header("Data Preview & Validation")
@@ -160,7 +163,8 @@ def main():
                             st.dataframe(subject_df[display_cols])
                        
                         st.write("**Required Columns Present (after mapping)**:")
-                        required_cols = list(COLUMN_MAPPINGS.keys())
+                        # Exclude student_name and father_name as they come from Student Info file
+                        required_cols = [col for col in COLUMN_MAPPINGS.keys() if col not in ['father_name', 'student_name']]
                         for col in required_cols:
                             status = "✅" if col in subject_df.columns else "❌"
                             st.write(f"{status} {col}")
@@ -172,11 +176,11 @@ def main():
                     process_subject_files.clear()
                     st.rerun()
                 
-                # Backlog Data Preview
+                # Student Info Preview
                 if 'backlog_data' in st.session_state:
-                    st.subheader("📋 Backlog Data Preview")
+                    st.subheader("📋 Student Info Preview")
                     backlog_df = st.session_state['backlog_data']
-                    with st.expander(f"📋 Backlog Data ({len(backlog_df)} students)", expanded=False):
+                    with st.expander(f"📋 Student Info ({len(backlog_df)} students)", expanded=False):
                         st.dataframe(backlog_df)
                         sem_cols = [col for col in backlog_df.columns if col.startswith('sem')]
                         st.write(f"**Semester columns detected**: {', '.join(sem_cols) if sem_cols else 'None'}")
@@ -185,7 +189,7 @@ def main():
 
     # Tab 3: Edit Data (separate tab)
     with tabs[3]:
-        st.header("✏️ Edit Student & Backlog Data")
+        st.header("✏️ Edit Student & Subject Data")
         if 'subjects_data' in st.session_state:
             subjects_data = st.session_state['subjects_data']
             all_students = st.session_state['all_students']
@@ -209,7 +213,7 @@ def main():
                         is_lab = subject.get('is_lab', False)
                         
                         if not is_lab:
-                            dt_marks = st.number_input(f"DT Marks (out of 30) - {subject['subject_name']}", min_value=0, max_value=30, value=int(subject['dt_marks']), step=1)
+                            dt_marks = st.number_input(f"DT Marks (out of 20) - {subject['subject_name']}", min_value=0, max_value=20, value=int(subject['dt_marks']), step=1)
                             st_marks = st.number_input(f"ST Marks (out of 10) - {subject['subject_name']}", min_value=0, max_value=10, value=int(subject['st_marks']), step=1)
                             at_marks = st.number_input(f"AT Marks (out of 10) - {subject['subject_name']}", min_value=0, max_value=10, value=int(subject['at_marks']), step=1)
                             total_marks = dt_marks + st_marks + at_marks
@@ -247,8 +251,8 @@ def main():
             
             st.markdown("---")
             
-            # Backlog Data Edit Section
-            st.subheader("📋 Edit Backlog Data")
+            # Student Info Edit Section
+            st.subheader("📋 Edit Student Info")
             if 'backlog_data' in st.session_state:
                 backlog_df = st.session_state['backlog_data']
                 st.info("Edit student info (name, father name) and backlog subjects here.")
@@ -318,9 +322,9 @@ def main():
                                 st.success(f"✅ Updated backlog data for {edit_backlog_student}")
                                 st.rerun()
                 else:
-                    st.warning("Backlog data doesn't have a roll_no column")
+                    st.warning("Student Info data doesn't have a roll_no column")
             else:
-                st.warning("Please upload backlog data in the 'Upload Subject Files' tab to edit student and father names.")
+                st.warning("Please upload Student Info in the 'Upload Subject Files' tab to edit student and father names.")
         else:
             st.warning("Please process your subject data in the 'Preview Data' tab first.")
     
@@ -458,18 +462,17 @@ def main():
         st.markdown("""
         **Required Columns for each SUBJECT file (case-insensitive variations accepted)**:
         - `roll_no`: Student roll number (e.g., Roll No, Roll Number, RollNo)
-        - `student_name`: Full name (e.g., Student Name, Name, Full Name)
-        - `dt_marks`: Descriptive Test marks (out of 30) - for theory subjects
-        - `st_marks`: Surprise Test marks (out of 10) - for theory subjects
-        - `at_marks`: Assignment marks (out of 10) - for theory subjects
-        - `total_marks`: Total CIE-1 marks (out of 50) - for theory subjects
-        - `attendance_conducted`: Classes conducted (e.g., Attendance Conducted, Total Classes)
-        - `attendance_present`: Classes attended (e.g., Attendance Present, Classes Attended)
+        - `dt_marks`: Descriptive Test marks (out of 20) - for theory subjects only
+        - `st_marks`: Surprise Test marks (out of 10) - for theory subjects only
+        - `at_marks`: Assignment marks (out of 10) - for theory subjects only
+        - `total_marks`: Total CIE-1 marks (out of 40) - for theory subjects only
+        - `attendance_conducted`: No of classes conducted (e.g., Attendance Conducted, Total Classes)
+        - `attendance_present`: No of classes attended (e.g., Attendance Present, Classes Attended)
         
-        **Required Columns for BACKLOG file**:
-        - `roll_no`: Student roll number (primary key)
-        - `student_name`: Full name
-        - `father_name`: Father's name (required in backlog file)
+        **Required Columns for STUDENT INFO file**:
+        - `roll_no`: Student roll number (primary key for matching)
+        - `student_name`: Full name (REQUIRED - used for reports)
+        - `father_name`: Father's name (REQUIRED - used for reports)
         - `sem 1`, `sem 2`, etc.: Semester-wise backlog subjects (comma-separated)
         """)
         st.subheader("📊 Sample Data")
