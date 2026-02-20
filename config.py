@@ -49,6 +49,10 @@ COLUMN_MAPPINGS = {
         'attendance present', 'classes attended', 'present classes',
         'attendancepresent', 'attended classes', 'present', 'attendance_present',
         'no of classes attended', 'periods attended', 'classes present'
+    ],
+    'lab_marks': [
+        'lab marks', 'labmarks', 'lab_marks', 'lab score', 'lab total',
+        'practical marks', 'marks'
     ]
 }
 

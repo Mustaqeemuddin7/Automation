@@ -62,12 +62,21 @@ def process_subject_files(uploaded_files: List[Tuple[str, bytes]]) -> Tuple[Opti
             has_dt = 'dt_marks' in df.columns
             has_st = 'st_marks' in df.columns
             has_at = 'at_marks' in df.columns
+            has_lab_marks = 'lab_marks' in df.columns
             is_lab_file = not (has_dt or has_st or has_at)
 
             # Ensure marks columns exist; for labs, fill with 0 to avoid errors
+            # But preserve 'ab'/'AB' string values in existing marks columns
             for col in ['dt_marks', 'st_marks', 'at_marks', 'total_marks']:
                 if col not in df.columns:
                     df[col] = 0
+            if not has_lab_marks:
+                df['lab_marks'] = 0
+            # Convert marks columns to object dtype so mixed types (int/float + 'ab')
+            # don't cause serialization errors
+            for col in ['dt_marks', 'st_marks', 'at_marks', 'total_marks', 'lab_marks']:
+                if col in df.columns:
+                    df[col] = df[col].astype(object)
             df['is_lab'] = is_lab_file
             
             subjects_data[subject_name] = df

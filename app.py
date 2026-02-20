@@ -155,12 +155,17 @@ def main():
                         is_lab = subject_df['is_lab'].iloc[0] if 'is_lab' in subject_df.columns and len(subject_df) > 0 else False
                         if is_lab:
                             # Filter out marks columns and is_lab for lab files
-                            display_cols = [col for col in subject_df.columns if col not in ['dt_marks', 'st_marks', 'at_marks', 'total_marks', 'is_lab']]
+                            display_cols = [col for col in subject_df.columns if col not in ['dt_marks', 'st_marks', 'at_marks', 'total_marks', 'is_lab', 'lab_marks']]
                             st.dataframe(subject_df[display_cols])
                         else:
-                            # For theory files, hide is_lab column only
-                            display_cols = [col for col in subject_df.columns if col != 'is_lab']
-                            st.dataframe(subject_df[display_cols])
+                            # For theory files, hide is_lab and lab_marks columns
+                            display_cols = [col for col in subject_df.columns if col not in ['is_lab', 'lab_marks']]
+                            # Convert marks columns to string to handle mixed types (int + 'ab')
+                            display_df = subject_df[display_cols].copy()
+                            for mc in ['dt_marks', 'st_marks', 'at_marks', 'total_marks']:
+                                if mc in display_df.columns:
+                                    display_df[mc] = display_df[mc].astype(str)
+                            st.dataframe(display_df)
                        
                         st.write("**Required Columns Present (after mapping)**:")
                         # Exclude student_name and father_name as they come from Student Info file

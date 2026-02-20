@@ -41,8 +41,11 @@ async def get_subjects_data():
         is_lab = bool(df['is_lab'].iloc[0]) if 'is_lab' in df.columns and len(df) > 0 else False
         
         if is_lab:
-            # For labs, hide marks columns
-            display_cols = [col for col in display_cols if col not in ['dt_marks', 'st_marks', 'at_marks', 'total_marks']]
+            # For labs, hide marks columns and lab_marks
+            display_cols = [col for col in display_cols if col not in ['dt_marks', 'st_marks', 'at_marks', 'total_marks', 'lab_marks']]
+        else:
+            # For theory subjects, hide lab_marks column
+            display_cols = [col for col in display_cols if col not in ['lab_marks']]
         
         subjects_preview[subject_name] = {
             "records": dataframe_to_dict(df[display_cols]),
@@ -209,7 +212,8 @@ async def update_backlog_data(roll_no: str, update: BacklogUpdate):
     if not roll_col:
         raise HTTPException(status_code=400, detail="No roll_no column in backlog data")
     
-    idx = backlog_df[backlog_df[roll_col] == roll_no].index
+    roll_no_str = str(roll_no).strip()
+    idx = backlog_df[backlog_df[roll_col].astype(str).str.strip() == roll_no_str].index
     
     if idx.empty:
         raise HTTPException(status_code=404, detail=f"Student {roll_no} not found in backlog data")

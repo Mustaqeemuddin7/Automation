@@ -125,7 +125,8 @@ def get_student_complete_data(student_roll, subjects_data, backlog_data=None):
                 roll_col = col
                 break
         if roll_col:
-            student_backlog = backlog_data[backlog_data[roll_col] == student_roll]
+            student_roll_str = str(student_roll).strip()
+            student_backlog = backlog_data[backlog_data[roll_col].astype(str).str.strip() == student_roll_str]
             if not student_backlog.empty:
                 # Get father_name from Student Info
                 for col in ['father_name', 'father name', 'fathername']:
@@ -142,8 +143,9 @@ def get_student_complete_data(student_roll, subjects_data, backlog_data=None):
                             student_name_from_backlog = str(val).strip()
                             break
     
+    student_roll_str = str(student_roll).strip()
     for subject_name, subject_df in subjects_data.items():
-        student_data = subject_df[subject_df['roll_no'] == student_roll]
+        student_data = subject_df[subject_df['roll_no'].astype(str).str.strip() == student_roll_str]
         if not student_data.empty:
             student_info = student_data.iloc[0].to_dict()
             if not student_complete_data['personal_info']:
@@ -160,6 +162,7 @@ def get_student_complete_data(student_roll, subjects_data, backlog_data=None):
                 'st_marks': student_info.get('st_marks', 0),
                 'at_marks': student_info.get('at_marks', 0),
                 'total_marks': student_info.get('total_marks', 0),
+                'lab_marks': student_info.get('lab_marks', 0),
                 'attendance_conducted': student_info.get('attendance_conducted', 0),
                 'attendance_present': student_info.get('attendance_present', 0),
                 'is_lab': student_info.get('is_lab', False)
@@ -303,6 +306,8 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
         total_attendance_conducted = 0
         total_attendance_present = 0
         total_marks_sum = 0
+        total_max_marks = 0
+        num_lab_subjects_with_marks = 0
         # Sort: theory first (is_lab False/absent), then labs
         subjects_sorted = sorted(subjects, key=lambda s: 1 if s.get('is_lab', False) else 0)
         for idx, subject in enumerate(subjects_sorted):
@@ -314,26 +319,63 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
             total_attendance_present += attendance_present
             is_lab = bool(subject.get('is_lab', False))
             if is_lab:
-                # For labs, we will merge DT/ST/AT/Total cells later and set a single '-'
+                # For labs, we will merge DT/ST/AT/Total cells later
                 dt_marks = ''
                 st_marks = ''
                 at_marks = ''
                 total_marks = ''
+                # Check lab marks for contribution to total
+                has_lab_marks_val = subject.get('lab_marks', 0)
+                has_lm = (has_lab_marks_val != 0) if not isinstance(has_lab_marks_val, str) else True
+                if has_lm:
+                    lab_marks_str = str(has_lab_marks_val).strip()
+                    if lab_marks_str.lower() != 'ab':
+                        try:
+                            lab_val = float(has_lab_marks_val)
+                            total_marks_sum += lab_val
+                            num_lab_subjects_with_marks += 1
+                        except (ValueError, TypeError):
+                            pass
+                    else:
+                        num_lab_subjects_with_marks += 1
             else:
-                dt_marks = subject['dt_marks'] * 20 / 20
-                st_marks = subject['st_marks']
-                at_marks = subject['at_marks']
-                total_marks = dt_marks + st_marks + at_marks
+                # Theory subject - handle individual AB marks
+                dt_val = subject['dt_marks']
+                st_val = subject['st_marks']
+                at_val = subject['at_marks']
+                
+                # Check each mark for AB (case-insensitive)
+                dt_is_ab = isinstance(dt_val, str) and str(dt_val).strip().lower() == 'ab'
+                st_is_ab = isinstance(st_val, str) and str(st_val).strip().lower() == 'ab'
+                at_is_ab = isinstance(at_val, str) and str(at_val).strip().lower() == 'ab'
+                
+                # Display: AB marks show 'AB', numeric marks show value
+                # Calculation: AB marks treated as 0, subject always included in totals
+                try:
+                    dt_numeric = 0 if dt_is_ab else float(dt_val)
+                    st_numeric = 0 if st_is_ab else float(st_val)
+                    at_numeric = 0 if at_is_ab else float(at_val)
+                except (ValueError, TypeError):
+                    dt_numeric = 0
+                    st_numeric = 0
+                    at_numeric = 0
+                
+                dt_marks = 'AB' if dt_is_ab else dt_numeric
+                st_marks = 'AB' if st_is_ab else st_numeric
+                at_marks = 'AB' if at_is_ab else at_numeric
+                total_marks = dt_numeric + st_numeric + at_numeric
                 total_marks_sum += total_marks
+                total_max_marks += 40
+            
             row_data = [
                 str(idx + 1),
                 subject['subject_name'],
                 str(attendance_conducted),
                 str(attendance_present),
-                (str(round(dt_marks)) if dt_marks not in ('', '-') else ''),
+                (str(round(dt_marks)) if isinstance(dt_marks, (int, float)) and dt_marks not in ('', '-') else str(dt_marks) if dt_marks != '' else ''),
                 (str(st_marks) if st_marks not in ('', '-') else ''),
                 (str(at_marks) if at_marks not in ('', '-') else ''),
-                (str(round(total_marks)) if total_marks not in ('', '-') else '')
+                (str(round(total_marks)) if isinstance(total_marks, (int, float)) and total_marks not in ('', '-') else str(total_marks) if total_marks != '' else '')
             ]
             for i, data in enumerate(row_data):
                 if i < len(data_cells):
@@ -343,14 +385,25 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                             run.font.name = 'Times New Roman'
                             run.font.size = Pt(12)
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            # For lab subjects, merge DT, ST, AT and Total cells into one and set a single '-'
+            # For lab subjects, merge DT, ST, AT and Total cells into one
             if is_lab:
                 try:
                     merged = data_cells[4].merge(data_cells[5])
                     merged = merged.merge(data_cells[6])
                     merged = merged.merge(data_cells[7])
-                    # Set a single hyphen and center it
-                    merged.text = '-'
+                    has_lab_marks_val = subject.get('lab_marks', 0)
+                    has_lm = (has_lab_marks_val != 0) if not isinstance(has_lab_marks_val, str) else True
+                    if has_lm:
+                        lab_marks_str = str(has_lab_marks_val).strip()
+                        if lab_marks_str.lower() == 'ab':
+                            merged.text = 'AB'
+                        else:
+                            try:
+                                merged.text = str(round(float(has_lab_marks_val)))
+                            except (ValueError, TypeError):
+                                merged.text = str(has_lab_marks_val)
+                    else:
+                        merged.text = '-'
                     for paragraph in merged.paragraphs:
                         for run in paragraph.runs:
                             run.font.name = 'Times New Roman'
@@ -358,17 +411,24 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 except Exception:
                     pass
+        
+        # Add lab subjects with marks to max marks
+        total_max_marks += num_lab_subjects_with_marks * 25
+        
         total_row = table.add_row()
         total_cells = total_row.cells
         total_cells[1].text = "TOTAL"
         total_cells[2].text = str(total_attendance_conducted)
         total_cells[3].text = str(total_attendance_present)
-        # Merge DT, ST, AT, Total cells in TOTAL row
+        # Merge DT, ST, AT, Total cells in TOTAL row - show total marks obtained
         try:
             merged_total = total_cells[4].merge(total_cells[5])
             merged_total = merged_total.merge(total_cells[6])
             merged_total = merged_total.merge(total_cells[7])
-            merged_total.text = ''
+            if total_max_marks > 0:
+                merged_total.text = str(round(total_marks_sum))
+            else:
+                merged_total.text = ''
         except Exception:
             pass
         overall_attendance_percent = (total_attendance_present / total_attendance_conducted * 100) if total_attendance_conducted > 0 else 0
@@ -380,12 +440,16 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
         merged_attendance_cell = table.cell(percent_row_idx, 2)
         merged_attendance_cell.merge(table.cell(percent_row_idx, 3))
         merged_attendance_cell.text = f"{overall_attendance_percent:.2f}%"
-        # Merge DT/ST/AT/Total for percentage row and place '-'
+        # Merge DT/ST/AT/Total for percentage row - show marks percentage
         try:
             merged_marks_cell = table.cell(percent_row_idx, 4).merge(table.cell(percent_row_idx, 5))
             merged_marks_cell = merged_marks_cell.merge(table.cell(percent_row_idx, 6))
             merged_marks_cell = merged_marks_cell.merge(table.cell(percent_row_idx, 7))
-            merged_marks_cell.text = '-'
+            if total_max_marks > 0:
+                marks_percentage = (total_marks_sum / total_max_marks) * 100
+                merged_marks_cell.text = f"{marks_percentage:.2f}%"
+            else:
+                merged_marks_cell.text = '-'
             for p in merged_marks_cell.paragraphs:
                 for run in p.runs:
                     run.font.name = 'Times New Roman'
@@ -540,7 +604,7 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                             roll_col = col
                             break
                     if roll_col:
-                        student_backlog_row = backlog_data[backlog_data[roll_col] == student_roll]
+                        student_backlog_row = backlog_data[backlog_data[roll_col].astype(str).str.strip() == str(student_roll).strip()]
                         if not student_backlog_row.empty:
                             student_backlog = student_backlog_row.iloc[0]
                 
@@ -729,6 +793,8 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
             total_attendance_conducted = 0
             total_attendance_present = 0
             total_marks_sum = 0
+            total_max_marks = 0
+            num_lab_subjects_with_marks = 0
             subjects_sorted = sorted(subjects, key=lambda s: 1 if s.get('is_lab', False) else 0)
             # We'll enforce S.No. width after table completion
             for idx, subject in enumerate(subjects_sorted):
@@ -740,25 +806,62 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                 total_attendance_present += attendance_present
                 is_lab = bool(subject.get('is_lab', False))
                 if is_lab:
-                    dt_marks = '-'
-                    st_marks = '-'
-                    at_marks = '-'
-                    total_marks = '-'
+                    dt_marks = ''
+                    st_marks = ''
+                    at_marks = ''
+                    total_marks = ''
+                    # Check lab marks for contribution to total
+                    has_lab_marks_val = subject.get('lab_marks', 0)
+                    has_lm = (has_lab_marks_val != 0) if not isinstance(has_lab_marks_val, str) else True
+                    if has_lm:
+                        lab_marks_str = str(has_lab_marks_val).strip()
+                        if lab_marks_str.lower() != 'ab':
+                            try:
+                                lab_val = float(has_lab_marks_val)
+                                total_marks_sum += lab_val
+                                num_lab_subjects_with_marks += 1
+                            except (ValueError, TypeError):
+                                pass
+                        else:
+                            num_lab_subjects_with_marks += 1
                 else:
-                    dt_marks = subject['dt_marks'] * 20 / 30
-                    st_marks = subject['st_marks']
-                    at_marks = subject['at_marks']
-                    total_marks = dt_marks + st_marks + at_marks
+                    # Theory subject - handle individual AB marks
+                    dt_val = subject['dt_marks']
+                    st_val = subject['st_marks']
+                    at_val = subject['at_marks']
+                    
+                    # Check each mark for AB (case-insensitive)
+                    dt_is_ab = isinstance(dt_val, str) and str(dt_val).strip().lower() == 'ab'
+                    st_is_ab = isinstance(st_val, str) and str(st_val).strip().lower() == 'ab'
+                    at_is_ab = isinstance(at_val, str) and str(at_val).strip().lower() == 'ab'
+                    
+                    # Display: AB marks show 'AB', numeric marks show value
+                    # Calculation: AB marks treated as 0, subject always included in totals
+                    try:
+                        dt_numeric = 0 if dt_is_ab else float(dt_val)
+                        st_numeric = 0 if st_is_ab else float(st_val)
+                        at_numeric = 0 if at_is_ab else float(at_val)
+                    except (ValueError, TypeError):
+                        dt_numeric = 0
+                        st_numeric = 0
+                        at_numeric = 0
+                    
+                    dt_marks = 'AB' if dt_is_ab else dt_numeric
+                    st_marks = 'AB' if st_is_ab else st_numeric
+                    at_marks = 'AB' if at_is_ab else at_numeric
+                    total_marks = dt_numeric + st_numeric + at_numeric
                     total_marks_sum += total_marks
+                    total_max_marks += 40
+                
                 row_data = [
                     str(idx + 1),
                     subject['subject_name'],
                     str(attendance_conducted),
                     str(attendance_present),
-                    (str(round(dt_marks)) if dt_marks != '-' else '-'),
-                    (str(st_marks) if st_marks != '-' else '-'),
-                    (str(at_marks) if at_marks != '-' else '-'),
-                    (str(round(total_marks)) if total_marks != '-' else '-')
+                    (str(round(dt_marks)) if isinstance(dt_marks, (int, float)) and dt_marks not in ('', '-') else str(dt_marks) if dt_marks != '' else ''),
+                    (str(st_marks) if st_marks not in ('', '-') else ''),
+                    (str(at_marks) if at_marks not in ('', '-') else ''),
+                    (str(round(total_marks)) if isinstance(total_marks, (int, float)) and total_marks not in ('', '-') else str(total_marks) if total_marks != '' else '')
                 ]
                 for i, data in enumerate(row_data):
                     if i < len(data_cells):
@@ -773,7 +876,19 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                         merged = data_cells[4].merge(data_cells[5])
                         merged = merged.merge(data_cells[6])
                         merged = merged.merge(data_cells[7])
-                        merged.text = '-'
+                        has_lab_marks_val = subject.get('lab_marks', 0)
+                        has_lm = (has_lab_marks_val != 0) if not isinstance(has_lab_marks_val, str) else True
+                        if has_lm:
+                            lab_marks_str = str(has_lab_marks_val).strip()
+                            if lab_marks_str.lower() == 'ab':
+                                merged.text = 'AB'
+                            else:
+                                try:
+                                    merged.text = str(round(float(has_lab_marks_val)))
+                                except (ValueError, TypeError):
+                                    merged.text = str(has_lab_marks_val)
+                        else:
+                            merged.text = '-'
                         for paragraph in merged.paragraphs:
                             for run in paragraph.runs:
                                 run.font.name = 'Times New Roman'
@@ -781,6 +896,10 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     except Exception:
                         pass
+            
+            # Add lab subjects with marks to max marks
+            total_max_marks += num_lab_subjects_with_marks * 25
+            
             total_row = table.add_row()
             total_cells = total_row.cells
             total_cells[1].text = "TOTAL"
@@ -790,7 +909,10 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                 merged_total = total_cells[4].merge(total_cells[5])
                 merged_total = merged_total.merge(total_cells[6])
                 merged_total = merged_total.merge(total_cells[7])
-                merged_total.text = ''
+                if total_max_marks > 0:
+                    merged_total.text = str(round(total_marks_sum))
+                else:
+                    merged_total.text = ''
             except Exception:
                 pass
             overall_attendance_percent = (total_attendance_present / total_attendance_conducted * 100) if total_attendance_conducted > 0 else 0
@@ -806,7 +928,11 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                 merged_marks_cell = table.cell(percent_row_idx, 4).merge(table.cell(percent_row_idx, 5))
                 merged_marks_cell = merged_marks_cell.merge(table.cell(percent_row_idx, 6))
                 merged_marks_cell = merged_marks_cell.merge(table.cell(percent_row_idx, 7))
-                merged_marks_cell.text = '-'
+                if total_max_marks > 0:
+                    marks_percentage = (total_marks_sum / total_max_marks) * 100
+                    merged_marks_cell.text = f"{marks_percentage:.2f}%"
+                else:
+                    merged_marks_cell.text = '-'
                 for p in merged_marks_cell.paragraphs:
                     for run in p.runs:
                         run.font.name = 'Times New Roman'

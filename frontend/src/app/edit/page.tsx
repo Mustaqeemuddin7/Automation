@@ -84,10 +84,9 @@ export default function EditPage() {
 
     const handleSubjectChange = (index: number, field: string, value: string) => {
         if (!studentData) return;
-        const numValue = parseInt(value) || 0;
         const updated = { ...studentData };
         updated.subjects = updated.subjects.map((s, i) =>
-            i === index ? { ...s, [field]: numValue } : s
+            i === index ? { ...s, [field]: value === '' ? '' : (parseInt(value) || 0) } : s
         );
         setStudentData(updated);
     };
