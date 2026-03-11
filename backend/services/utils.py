@@ -78,6 +78,7 @@ def process_subject_files(uploaded_files: List[Tuple[str, bytes]]) -> Tuple[Opti
                 if col in df.columns:
                     df[col] = df[col].astype(object)
             df['is_lab'] = is_lab_file
+            df['has_original_lab_marks'] = has_lab_marks if is_lab_file else False
             
             subjects_data[subject_name] = df
             if 'roll_no' in df.columns:

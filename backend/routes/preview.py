@@ -37,12 +37,16 @@ async def get_subjects_data():
     subjects_preview = {}
     for subject_name, df in data["subjects_data"].items():
         # Filter out internal columns for display
-        display_cols = [col for col in df.columns if col not in ['is_lab']]
+        display_cols = [col for col in df.columns if col not in ['is_lab', 'has_original_lab_marks']]
         is_lab = bool(df['is_lab'].iloc[0]) if 'is_lab' in df.columns and len(df) > 0 else False
+        has_orig_lab = bool(df['has_original_lab_marks'].iloc[0]) if 'has_original_lab_marks' in df.columns and len(df) > 0 else False
         
         if is_lab:
-            # For labs, hide marks columns and lab_marks
-            display_cols = [col for col in display_cols if col not in ['dt_marks', 'st_marks', 'at_marks', 'total_marks', 'lab_marks']]
+            # For labs, hide theory marks columns
+            display_cols = [col for col in display_cols if col not in ['dt_marks', 'st_marks', 'at_marks', 'total_marks']]
+            # Also hide lab_marks if the file didn't have a marks column
+            if not has_orig_lab:
+                display_cols = [col for col in display_cols if col not in ['lab_marks']]
         else:
             # For theory subjects, hide lab_marks column
             display_cols = [col for col in display_cols if col not in ['lab_marks']]
@@ -54,8 +58,13 @@ async def get_subjects_data():
             "is_lab": is_lab
         }
     
+    # Sort: theory subjects first, then labs
+    sorted_subjects = dict(
+        sorted(subjects_preview.items(), key=lambda x: x[1]["is_lab"])
+    )
+    
     return {
-        "subjects": subjects_preview,
+        "subjects": sorted_subjects,
         "total_subjects": len(data["subjects_data"]),
         "total_students": len(data["all_students"]),
         "all_students": data["all_students"]
@@ -119,13 +128,18 @@ async def get_student_data(roll_no: str):
                 "st_marks": int(row.get('st_marks', 0) or 0),
                 "at_marks": int(row.get('at_marks', 0) or 0),
                 "total_marks": int(row.get('total_marks', 0) or 0),
+                "lab_marks": int(row.get('lab_marks', 0) or 0),
                 "attendance_conducted": int(row.get('attendance_conducted', 0) or 0),
                 "attendance_present": int(row.get('attendance_present', 0) or 0),
-                "is_lab": bool(row.get('is_lab', False))
+                "is_lab": bool(row.get('is_lab', False)),
+                "has_original_lab_marks": bool(row.get('has_original_lab_marks', False))
             })
     
     if not subjects:
         raise HTTPException(status_code=404, detail=f"Student {roll_no} not found in any subject data")
+    
+    # Sort: theory subjects first, then labs
+    subjects.sort(key=lambda s: s["is_lab"])
     
     return {
         "roll_no": roll_no,

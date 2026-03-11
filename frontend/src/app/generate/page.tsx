@@ -25,7 +25,7 @@ import {
 export default function GeneratePage() {
     const [config, setConfig] = useState({
         department_name: "Computer Science",
-        report_date: new Date().toLocaleDateString("en-GB").replace(/\//g, "."),
+        report_date: new Date().toLocaleDateString("en-GB"),
         academic_year: "2024-2025",
         semester: "B.E- IV Semester",
         attendance_start: "",
@@ -209,7 +209,7 @@ export default function GeneratePage() {
                                         onChange={(e) =>
                                             setConfig({ ...config, report_date: e.target.value })
                                         }
-                                        placeholder="DD.MM.YYYY"
+                                        placeholder="DD/MM/YYYY"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -239,7 +239,7 @@ export default function GeneratePage() {
                                         onChange={(e) =>
                                             setConfig({ ...config, attendance_start: e.target.value })
                                         }
-                                        placeholder="DD.MM.YYYY (optional)"
+                                        placeholder="DD/MM/YYYY (optional)"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -249,7 +249,7 @@ export default function GeneratePage() {
                                         onChange={(e) =>
                                             setConfig({ ...config, attendance_end: e.target.value })
                                         }
-                                        placeholder="DD.MM.YYYY (optional)"
+                                        placeholder="DD/MM/YYYY (optional)"
                                     />
                                 </div>
                             </div>

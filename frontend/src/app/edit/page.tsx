@@ -244,6 +244,12 @@ export default function EditPage() {
                                                     </div>
                                                 </>
                                             )}
+                                            {subject.is_lab && Boolean((subject as Record<string, unknown>).has_original_lab_marks) && (
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs">Lab Marks</Label>
+                                                    <Input type="number" value={(subject as Record<string, unknown>).lab_marks as number ?? 0} onChange={(e) => handleSubjectChange(index, "lab_marks", e.target.value)} />
+                                                </div>
+                                            )}
                                         </div>
                                         {index < studentData.subjects.length - 1 && <Separator className="mt-6" />}
                                     </div>

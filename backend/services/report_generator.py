@@ -9,6 +9,43 @@ import pandas as pd
 
 import os
 
+
+def generate_hod_remark(attendance_percent, cie_percent, backlog_count):
+    """Generate HOD remark based on attendance %, CIE marks %, and backlog count.
+    
+    Rules (checked in order — negative conditions first, then positive):
+      < 75% attendance         → Poor Attendance
+      < 50% CIE                → Academically Weak
+      backlogs >= 5 (only)     → Backlog Concern
+      >= 90% att, >= 85% CIE, 0 backlogs   → Outstanding
+      >= 85% att, >= 75% CIE, <= 2 backlogs → Very Good
+      >= 80% att, >= 70% CIE, <= 2 backlogs → Good Performance
+      >= 75% att, >= 60% CIE, 3-4 backlogs  → Satisfactory
+      >= 75% att, >= 70% CIE, >= 5 backlogs → Needs Improvement
+      else                                   → Satisfactory
+    """
+    # Negative / warning conditions first (override positives)
+    if attendance_percent < 50:
+        return 'Poor Attendance'
+    if cie_percent < 50:
+        return 'Academically Weak'
+    
+    # Positive conditions (most specific first)
+    if attendance_percent >= 90 and cie_percent >= 85 and backlog_count == 0:
+        return 'Outstanding'
+    if attendance_percent >= 85 and cie_percent >= 75 and backlog_count <= 2:
+        return 'Very Good'
+    if attendance_percent >= 80 and cie_percent >= 70 and backlog_count <= 2:
+        return 'Good Performance'
+    if attendance_percent >= 75 and cie_percent >= 60 and 3 <= backlog_count <= 4:
+        return 'Satisfactory'
+    if attendance_percent >= 75 and cie_percent >= 70 and backlog_count >= 5:
+        return 'Needs Improvement'
+    if backlog_count >= 5:
+        return 'Backlog Concern'
+    
+    return 'Satisfactory'
+
 def add_logo_and_header(doc, department_name):
     """Add institutional header with logo on left, text on right (table layout), matching main format.docx"""
     from docx.oxml import OxmlElement
@@ -165,7 +202,8 @@ def get_student_complete_data(student_roll, subjects_data, backlog_data=None):
                 'lab_marks': student_info.get('lab_marks', 0),
                 'attendance_conducted': student_info.get('attendance_conducted', 0),
                 'attendance_present': student_info.get('attendance_present', 0),
-                'is_lab': student_info.get('is_lab', False)
+                'is_lab': student_info.get('is_lab', False),
+                'has_original_lab_marks': student_info.get('has_original_lab_marks', False)
             }
             student_complete_data['subjects'].append(subject_data)
     return student_complete_data
@@ -226,7 +264,7 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
     name_para = doc.add_paragraph()
     name_para.paragraph_format.space_before = Pt(0)
     name_para.paragraph_format.space_after = Pt(0)
-    name_run = name_para.add_run(f"Name of the Student : {personal_info['student_name']}")
+    name_run = name_para.add_run(f"Name of the Student : {str(personal_info['student_name']).upper()}")
     name_run.font.name = 'Times New Roman'
     name_run.font.size = Pt(12)
     name_run.font.bold = True
@@ -235,7 +273,7 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
     father_para = doc.add_paragraph()
     father_para.paragraph_format.space_before = Pt(0)
     father_para.paragraph_format.space_after = Pt(0)
-    father_run = father_para.add_run(f"Name of the Father   : {personal_info['father_name']}")
+    father_run = father_para.add_run(f"Name of the Father   : {str(personal_info['father_name']).upper()}")
     father_run.font.name = 'Times New Roman'
     father_run.font.size = Pt(12)
     father_run.font.bold = True
@@ -324,20 +362,19 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                 st_marks = ''
                 at_marks = ''
                 total_marks = ''
-                # Check lab marks for contribution to total
-                has_lab_marks_val = subject.get('lab_marks', 0)
-                has_lm = (has_lab_marks_val != 0) if not isinstance(has_lab_marks_val, str) else True
-                if has_lm:
-                    lab_marks_str = str(has_lab_marks_val).strip()
+                # Always count lab subjects in percentage calculation
+                has_orig_lab_marks = bool(subject.get('has_original_lab_marks', False))
+                if has_orig_lab_marks:
+                    num_lab_subjects_with_marks += 1
+                    has_lab_marks_val = subject.get('lab_marks', 0)
+                    lab_marks_str = str(has_lab_marks_val).strip() if has_lab_marks_val is not None else '0'
                     if lab_marks_str.lower() != 'ab':
                         try:
                             lab_val = float(has_lab_marks_val)
                             total_marks_sum += lab_val
-                            num_lab_subjects_with_marks += 1
                         except (ValueError, TypeError):
                             pass
-                    else:
-                        num_lab_subjects_with_marks += 1
+                # If no original lab marks column, labs are excluded from percentage
             else:
                 # Theory subject - handle individual AB marks
                 dt_val = subject['dt_marks']
@@ -369,7 +406,7 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
             
             row_data = [
                 str(idx + 1),
-                subject['subject_name'],
+                str(subject['subject_name']).title(),
                 str(attendance_conducted),
                 str(attendance_present),
                 (str(round(dt_marks)) if isinstance(dt_marks, (int, float)) and dt_marks not in ('', '-') else str(dt_marks) if dt_marks != '' else ''),
@@ -384,7 +421,11 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                         for run in paragraph.runs:
                             run.font.name = 'Times New Roman'
                             run.font.size = Pt(12)
-                        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        # Left-align subject name (col 1), center everything else
+                        if i == 1:
+                            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                        else:
+                            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             # For lab subjects, merge DT, ST, AT and Total cells into one
             if is_lab:
                 try:
@@ -417,7 +458,16 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
         
         total_row = table.add_row()
         total_cells = total_row.cells
-        total_cells[1].text = "TOTAL"
+        # Merge S.No. and Course Title for TOTAL row
+        total_row_idx = len(table.rows) - 1
+        merged_sno_title = table.cell(total_row_idx, 0).merge(table.cell(total_row_idx, 1))
+        merged_sno_title.text = "TOTAL"
+        for p in merged_sno_title.paragraphs:
+            for run in p.runs:
+                run.font.name = 'Times New Roman'
+                run.font.size = Pt(12)
+                run.font.bold = True
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         total_cells[2].text = str(total_attendance_conducted)
         total_cells[3].text = str(total_attendance_present)
         # Merge DT, ST, AT, Total cells in TOTAL row - show total marks obtained
@@ -434,7 +484,16 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
         overall_attendance_percent = (total_attendance_present / total_attendance_conducted * 100) if total_attendance_conducted > 0 else 0
         percent_row = table.add_row()
         percent_cells = percent_row.cells
-        percent_cells[1].text = "Percentage"
+        # Merge S.No. and Course Title for Percentage row
+        percent_sno_idx = len(table.rows) - 1
+        merged_sno_pct = table.cell(percent_sno_idx, 0).merge(table.cell(percent_sno_idx, 1))
+        merged_sno_pct.text = "Percentage"
+        for p in merged_sno_pct.paragraphs:
+            for run in p.runs:
+                run.font.name = 'Times New Roman'
+                run.font.size = Pt(12)
+                run.font.bold = True
+            p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         # Merge attendance columns (Conducted and Attended) into one cell for percentage value
         percent_row_idx = len(table.rows) - 1
         merged_attendance_cell = table.cell(percent_row_idx, 2)
@@ -625,7 +684,23 @@ def create_comprehensive_student_report(student_complete_data, department_name, 
                         else:
                             cell.text = '-'
                     else:  # Remarks column (last column)
-                        cell.text = '-'
+                        # Count total backlogs from semester data
+                        total_backlogs = 0
+                        if student_backlog is not None:
+                            for sem_i in range(1, num_prev_semesters + 1):
+                                for col_name in [f'sem {sem_i}', f'sem{sem_i}', f'Sem {sem_i}', f'Sem{sem_i}']:
+                                    if col_name in student_backlog.index:
+                                        val = student_backlog[col_name]
+                                        if pd.notna(val):
+                                            try:
+                                                total_backlogs += int(val)
+                                            except (ValueError, TypeError):
+                                                pass
+                                        break
+                        # Calculate CIE percentage (use values already computed above)
+                        cie_percent = (total_marks_sum / total_max_marks * 100) if total_max_marks > 0 else 0
+                        remark = generate_hod_remark(overall_attendance_percent, cie_percent, total_backlogs)
+                        cell.text = remark
                     for paragraph in cell.paragraphs:
                         for run in paragraph.runs:
                             run.font.name = 'Times New Roman'
@@ -720,7 +795,7 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
             name_para = doc.add_paragraph()
             name_para.paragraph_format.space_before = Pt(0)
             name_para.paragraph_format.space_after = Pt(0)
-            name_run = name_para.add_run(f"Name of the Student : {personal_info['student_name']}")
+            name_run = name_para.add_run(f"Name of the Student : {str(personal_info['student_name']).upper()}")
             name_run.font.name = 'Times New Roman'
             name_run.font.size = Pt(12)
             name_run.font.bold = True
@@ -729,7 +804,7 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
             father_para = doc.add_paragraph()
             father_para.paragraph_format.space_before = Pt(0)
             father_para.paragraph_format.space_after = Pt(0)
-            father_run = father_para.add_run(f"Name of the Father   : {personal_info['father_name']}")
+            father_run = father_para.add_run(f"Name of the Father   : {str(personal_info['father_name']).upper()}")
             father_run.font.name = 'Times New Roman'
             father_run.font.size = Pt(12)
             father_run.font.bold = True
@@ -810,20 +885,19 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                     st_marks = ''
                     at_marks = ''
                     total_marks = ''
-                    # Check lab marks for contribution to total
-                    has_lab_marks_val = subject.get('lab_marks', 0)
-                    has_lm = (has_lab_marks_val != 0) if not isinstance(has_lab_marks_val, str) else True
-                    if has_lm:
-                        lab_marks_str = str(has_lab_marks_val).strip()
+                    # Only count lab in percentage if the file had a marks column
+                    has_orig_lab_marks = bool(subject.get('has_original_lab_marks', False))
+                    if has_orig_lab_marks:
+                        num_lab_subjects_with_marks += 1
+                        has_lab_marks_val = subject.get('lab_marks', 0)
+                        lab_marks_str = str(has_lab_marks_val).strip() if has_lab_marks_val is not None else '0'
                         if lab_marks_str.lower() != 'ab':
                             try:
                                 lab_val = float(has_lab_marks_val)
                                 total_marks_sum += lab_val
-                                num_lab_subjects_with_marks += 1
                             except (ValueError, TypeError):
                                 pass
-                        else:
-                            num_lab_subjects_with_marks += 1
+                    # If no original lab marks column, labs are excluded from percentage
                 else:
                     # Theory subject - handle individual AB marks
                     dt_val = subject['dt_marks']
@@ -855,7 +929,7 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                 
                 row_data = [
                     str(idx + 1),
-                    subject['subject_name'],
+                    str(subject['subject_name']).title(),
                     str(attendance_conducted),
                     str(attendance_present),
                     (str(round(dt_marks)) if isinstance(dt_marks, (int, float)) and dt_marks not in ('', '-') else str(dt_marks) if dt_marks != '' else ''),
@@ -870,7 +944,11 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                             for run in paragraph.runs:
                                 run.font.name = 'Times New Roman'
                                 run.font.size = Pt(12)
-                            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            # Left-align subject name (col 1), center everything else
+                            if i == 1:
+                                paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                            else:
+                                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 if is_lab:
                     try:
                         merged = data_cells[4].merge(data_cells[5])
@@ -902,7 +980,16 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
             
             total_row = table.add_row()
             total_cells = total_row.cells
-            total_cells[1].text = "TOTAL"
+            # Merge S.No. and Course Title for TOTAL row
+            total_row_idx = len(table.rows) - 1
+            merged_sno_title = table.cell(total_row_idx, 0).merge(table.cell(total_row_idx, 1))
+            merged_sno_title.text = "TOTAL"
+            for p in merged_sno_title.paragraphs:
+                for run in p.runs:
+                    run.font.name = 'Times New Roman'
+                    run.font.size = Pt(12)
+                    run.font.bold = True
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             total_cells[2].text = str(total_attendance_conducted)
             total_cells[3].text = str(total_attendance_present)
             try:
@@ -918,7 +1005,16 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
             overall_attendance_percent = (total_attendance_present / total_attendance_conducted * 100) if total_attendance_conducted > 0 else 0
             percent_row = table.add_row()
             percent_cells = percent_row.cells
-            percent_cells[1].text = "Percentage"
+            # Merge S.No. and Course Title for Percentage row
+            percent_sno_idx = len(table.rows) - 1
+            merged_sno_pct = table.cell(percent_sno_idx, 0).merge(table.cell(percent_sno_idx, 1))
+            merged_sno_pct.text = "Percentage"
+            for p in merged_sno_pct.paragraphs:
+                for run in p.runs:
+                    run.font.name = 'Times New Roman'
+                    run.font.size = Pt(12)
+                    run.font.bold = True
+                p.alignment = WD_ALIGN_PARAGRAPH.CENTER
             # Merge attendance columns for percentage value
             percent_row_idx = len(table.rows) - 1
             merged_attendance_cell = table.cell(percent_row_idx, 2)
@@ -1108,7 +1204,23 @@ def create_consolidated_all_students_report(all_students_data, subjects_data, de
                             else:
                                 cell.text = '-'
                         else:  # Remarks column (last column)
-                            cell.text = '-'
+                            # Count total backlogs from semester data
+                            total_backlogs = 0
+                            if student_backlog is not None:
+                                for sem_i in range(1, num_prev_semesters + 1):
+                                    for col_name in [f'sem {sem_i}', f'sem{sem_i}', f'Sem {sem_i}', f'Sem{sem_i}']:
+                                        if col_name in student_backlog.index:
+                                            val = student_backlog[col_name]
+                                            if pd.notna(val):
+                                                try:
+                                                    total_backlogs += int(val)
+                                                except (ValueError, TypeError):
+                                                    pass
+                                            break
+                            # Calculate CIE percentage (use values already computed above)
+                            cie_percent = (total_marks_sum / total_max_marks * 100) if total_max_marks > 0 else 0
+                            remark = generate_hod_remark(overall_attendance_percent, cie_percent, total_backlogs)
+                            cell.text = remark
                         for paragraph in cell.paragraphs:
                             for run in paragraph.runs:
                                 run.font.name = 'Times New Roman'

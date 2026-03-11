@@ -30,19 +30,19 @@ export default function Home() {
 
         <div className="flex justify-center">
           <div className="inline-flex items-center gap-2 px-5 py-2 rounded-full bg-primary/10 border border-primary/20 backdrop-blur-sm">
-            <Sparkles className="h-4 w-4 text-primary animate-pulse" />
+            {/* <Sparkles className="h-4 w-4 text-primary animate-pulse" /> */}
             <span className="text-sm text-primary font-medium">Student Progress Reports</span>
           </div>
         </div>
 
         <div className="space-y-4">
           <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight">
-            <span className="bg-gradient-to-r from-primary via-blue-400 to-primary bg-clip-text text-transparent bg-[length:200%_auto] animate-gradient">LORDS Institute</span>
+            <span className="bg-gradient-to-r from-primary via-blue-400 to-primary bg-clip-text text-transparent bg-[length:200%_auto] animate-gradient">Lords Institute of Engineering and Technology</span>
           </h1>
-          <h2 className="text-3xl sm:text-4xl font-bold text-foreground">Report System</h2>
+          {/* <h2 className="text-3xl sm:text-4xl font-bold text-foreground">Report System</h2> */}
         </div>
 
-        <p className="text-xl text-muted-foreground max-w-2xl mx-auto">Generate professional institutional progress reports with attendance, marks, and student data.</p>
+        {/* <p className="text-xl text-muted-foreground max-w-2xl mx-auto">Generate professional institutional progress reports with attendance, marks, and student data.</p> */}
 
         <div className="flex flex-col sm:flex-row justify-center gap-4 pt-6">
           <Link href="/upload">

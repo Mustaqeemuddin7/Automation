@@ -197,13 +197,11 @@
 
 /* Header */
 header {
-  background: var(--background) !important;
-  border-bottom: 1px solid var(--border) !important;
-  box-shadow: 0 1px 3px 0 oklch(0 0 0 / 4%);
+  box-shadow: 0 2px 8px 0 oklch(0 0 0 / 6%);
 }
 
 .dark header {
-  box-shadow: 0 1px 3px 0 oklch(0 0 0 / 20%);
+  box-shadow: 0 2px 8px 0 oklch(0 0 0 / 25%);
 }
 
 /* Badge */
