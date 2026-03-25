@@ -18,9 +18,11 @@ interface StudentData {
     subjects: {
         subject_name: string;
         dt_marks: number;
-        st_marks: number;
+        aat_marks: number;
         at_marks: number;
         total_marks: number;
+        dtde_marks: number;
+        cie_marks: number;
         attendance_conducted: number;
         attendance_present: number;
         is_lab: boolean;
@@ -102,9 +104,11 @@ export default function EditPage() {
                 subjects: studentData.subjects.map((s) => ({
                     subject_name: s.subject_name,
                     dt_marks: s.dt_marks,
-                    st_marks: s.st_marks,
+                    aat_marks: s.aat_marks,
                     at_marks: s.at_marks,
                     total_marks: s.total_marks,
+                    dtde_marks: s.dtde_marks,
+                    cie_marks: s.cie_marks,
                     attendance_conducted: s.attendance_conducted,
                     attendance_present: s.attendance_present,
                 })),
@@ -231,12 +235,12 @@ export default function EditPage() {
                                                         <Input type="number" value={subject.dt_marks} onChange={(e) => handleSubjectChange(index, "dt_marks", e.target.value)} />
                                                     </div>
                                                     <div className="space-y-2">
-                                                        <Label className="text-xs">ST</Label>
-                                                        <Input type="number" value={subject.st_marks} onChange={(e) => handleSubjectChange(index, "st_marks", e.target.value)} />
-                                                    </div>
-                                                    <div className="space-y-2">
                                                         <Label className="text-xs">AT</Label>
                                                         <Input type="number" value={subject.at_marks} onChange={(e) => handleSubjectChange(index, "at_marks", e.target.value)} />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs">AAT</Label>
+                                                        <Input type="number" value={subject.aat_marks} onChange={(e) => handleSubjectChange(index, "aat_marks", e.target.value)} />
                                                     </div>
                                                     <div className="space-y-2">
                                                         <Label className="text-xs">Total</Label>
@@ -244,11 +248,17 @@ export default function EditPage() {
                                                     </div>
                                                 </>
                                             )}
-                                            {subject.is_lab && Boolean((subject as Record<string, unknown>).has_original_lab_marks) && (
-                                                <div className="space-y-2">
-                                                    <Label className="text-xs">Lab Marks</Label>
-                                                    <Input type="number" value={(subject as Record<string, unknown>).lab_marks as number ?? 0} onChange={(e) => handleSubjectChange(index, "lab_marks", e.target.value)} />
-                                                </div>
+                                            {subject.is_lab && (
+                                                <>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs">DTDE</Label>
+                                                        <Input type="number" value={subject.dtde_marks} onChange={(e) => handleSubjectChange(index, "dtde_marks", e.target.value)} />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label className="text-xs">CIE</Label>
+                                                        <Input type="number" value={subject.cie_marks} onChange={(e) => handleSubjectChange(index, "cie_marks", e.target.value)} />
+                                                    </div>
+                                                </>
                                             )}
                                         </div>
                                         {index < studentData.subjects.length - 1 && <Separator className="mt-6" />}

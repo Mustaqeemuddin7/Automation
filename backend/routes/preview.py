@@ -43,13 +43,13 @@ async def get_subjects_data():
         
         if is_lab:
             # For labs, hide theory marks columns
-            display_cols = [col for col in display_cols if col not in ['dt_marks', 'st_marks', 'at_marks', 'total_marks']]
-            # Also hide lab_marks if the file didn't have a marks column
+            display_cols = [col for col in display_cols if col not in ['dt_marks', 'aat_marks', 'at_marks', 'total_marks']]
+            # Also hide dtde_marks/cie_marks if the file didn't have marks columns
             if not has_orig_lab:
-                display_cols = [col for col in display_cols if col not in ['lab_marks']]
+                display_cols = [col for col in display_cols if col not in ['dtde_marks', 'cie_marks']]
         else:
-            # For theory subjects, hide lab_marks column
-            display_cols = [col for col in display_cols if col not in ['lab_marks']]
+            # For theory subjects, hide lab marks columns
+            display_cols = [col for col in display_cols if col not in ['dtde_marks', 'cie_marks']]
         
         subjects_preview[subject_name] = {
             "records": dataframe_to_dict(df[display_cols]),
@@ -125,10 +125,11 @@ async def get_student_data(roll_no: str):
             subjects.append({
                 "subject_name": subject_name,
                 "dt_marks": int(row.get('dt_marks', 0) or 0),
-                "st_marks": int(row.get('st_marks', 0) or 0),
+                "aat_marks": int(row.get('aat_marks', 0) or 0),
                 "at_marks": int(row.get('at_marks', 0) or 0),
                 "total_marks": int(row.get('total_marks', 0) or 0),
-                "lab_marks": int(row.get('lab_marks', 0) or 0),
+                "dtde_marks": int(row.get('dtde_marks', 0) or 0),
+                "cie_marks": int(row.get('cie_marks', 0) or 0),
                 "attendance_conducted": int(row.get('attendance_conducted', 0) or 0),
                 "attendance_present": int(row.get('attendance_present', 0) or 0),
                 "is_lab": bool(row.get('is_lab', False)),
@@ -173,9 +174,11 @@ async def update_student_data(roll_no: str, update: StudentUpdate):
                 if update.student_name:
                     df.loc[idx, 'student_name'] = update.student_name
                 df.loc[idx, 'dt_marks'] = subject_update.get('dt_marks', df.loc[idx, 'dt_marks'].values[0])
-                df.loc[idx, 'st_marks'] = subject_update.get('st_marks', df.loc[idx, 'st_marks'].values[0])
+                df.loc[idx, 'aat_marks'] = subject_update.get('aat_marks', df.loc[idx, 'aat_marks'].values[0])
                 df.loc[idx, 'at_marks'] = subject_update.get('at_marks', df.loc[idx, 'at_marks'].values[0])
                 df.loc[idx, 'total_marks'] = subject_update.get('total_marks', df.loc[idx, 'total_marks'].values[0])
+                df.loc[idx, 'dtde_marks'] = subject_update.get('dtde_marks', df.loc[idx, 'dtde_marks'].values[0])
+                df.loc[idx, 'cie_marks'] = subject_update.get('cie_marks', df.loc[idx, 'cie_marks'].values[0])
                 df.loc[idx, 'attendance_conducted'] = subject_update.get('attendance_conducted', df.loc[idx, 'attendance_conducted'].values[0])
                 df.loc[idx, 'attendance_present'] = subject_update.get('attendance_present', df.loc[idx, 'attendance_present'].values[0])
                 updated_subjects.append(subject_name)

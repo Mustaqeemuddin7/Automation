@@ -20,13 +20,16 @@ COLUMN_MAPPINGS = {
         'dt marks', 'descriptive test', 'dtmarks', 'descriptive marks', 'dt',
         'test marks', 'descriptive', 'dt_marks', 'mid marks', 'mid term'
     ],
-    'st_marks': [
+    'aat_marks': [
+        'aat marks', 'alternative assessment test', 'aatmarks', 'alternative assessment',
+        'aat', 'aat_marks', 'aat-1', 'aat 1', 'aat marks 1',
         'st marks', 'surprise test', 'stmarks', 'surprise marks', 'st',
         'surprise', 'surprise test marks', 'st_marks', 'quiz marks', 'quiz'
     ],
     'at_marks': [
         'at marks', 'assignment test', 'atmarks', 'assignment marks', 'at',
-        'assignment', 'assignment test marks', 'at_marks', 'assignment score'
+        'assignment', 'assignment test marks', 'at_marks', 'assignment score',
+        'at-1', 'at 1', 'at marks 1'
     ],
     'total_marks': [
         'total marks', 'totalmarks', 'total', 'overall marks', 'aggregate marks',
@@ -42,9 +45,13 @@ COLUMN_MAPPINGS = {
         'attendancepresent', 'attended classes', 'present', 'attendance_present',
         'no of classes attended', 'periods attended', 'classes present'
     ],
-    'lab_marks': [
-        'lab marks', 'labmarks', 'lab_marks', 'lab score', 'lab total',
-        'practical marks', 'marks'
+    'dtde_marks': [
+        'dtde marks', 'dtde', 'dtde_marks', 'dtde-1', 'dtde 1',
+        'dtde marks 1', 'dtde score', 'dtde total'
+    ],
+    'cie_marks': [
+        'cie marks', 'cie', 'cie_marks', 'cie-1', 'cie 1',
+        'cie marks 1', 'cie score', 'cie total'
     ]
 }
 

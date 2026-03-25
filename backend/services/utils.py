@@ -58,27 +58,30 @@ def process_subject_files(uploaded_files: List[Tuple[str, bytes]]) -> Tuple[Opti
             if missing_min:
                 return None, None, f"Missing required columns in {subject_name}: {', '.join(missing_min)}"
 
-            # Determine if this is a lab file (no marks present)
+            # Determine if this is a lab file (no theory marks columns present)
             has_dt = 'dt_marks' in df.columns
-            has_st = 'st_marks' in df.columns
+            has_aat = 'aat_marks' in df.columns
             has_at = 'at_marks' in df.columns
-            has_lab_marks = 'lab_marks' in df.columns
-            is_lab_file = not (has_dt or has_st or has_at)
+            has_dtde = 'dtde_marks' in df.columns
+            has_cie = 'cie_marks' in df.columns
+            is_lab_file = not (has_dt or has_aat or has_at)
 
             # Ensure marks columns exist; for labs, fill with 0 to avoid errors
             # But preserve 'ab'/'AB' string values in existing marks columns
-            for col in ['dt_marks', 'st_marks', 'at_marks', 'total_marks']:
+            for col in ['dt_marks', 'aat_marks', 'at_marks', 'total_marks']:
                 if col not in df.columns:
                     df[col] = 0
-            if not has_lab_marks:
-                df['lab_marks'] = 0
+            if not has_dtde:
+                df['dtde_marks'] = 0
+            if not has_cie:
+                df['cie_marks'] = 0
             # Convert marks columns to object dtype so mixed types (int/float + 'ab')
             # don't cause serialization errors
-            for col in ['dt_marks', 'st_marks', 'at_marks', 'total_marks', 'lab_marks']:
+            for col in ['dt_marks', 'aat_marks', 'at_marks', 'total_marks', 'dtde_marks', 'cie_marks']:
                 if col in df.columns:
                     df[col] = df[col].astype(object)
             df['is_lab'] = is_lab_file
-            df['has_original_lab_marks'] = has_lab_marks if is_lab_file else False
+            df['has_original_lab_marks'] = (has_dtde or has_cie) if is_lab_file else False
             
             subjects_data[subject_name] = df
             if 'roll_no' in df.columns:

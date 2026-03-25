@@ -31,8 +31,8 @@ const steps = [
         details: [
             "Go to the Preview tab.",
             "Check that all subjects appear with correct columns.",
-            "Theory subjects show: Roll No, Student Name, DT Marks, ST Marks, AT Marks, Total Marks, Attendance.",
-            "Lab subjects show: Roll No, Student Name, Lab Marks, Attendance.",
+            "Theory subjects show: Roll No, Student Name, DT Marks, AT Marks, AAT Marks, Total Marks, Attendance.",
+            "Lab subjects show: Roll No, Student Name, DTDE Marks, CIE Marks, Attendance.",
             "Subjects are sorted: theory first, then labs.",
         ],
     },
@@ -43,7 +43,7 @@ const steps = [
         details: [
             "Go to the Edit tab.",
             "Select a student by roll number.",
-            "Modify marks (DT, ST, AT for theory; Lab Marks for labs) or attendance values.",
+            "Modify marks (DT, AT, AAT for theory; DTDE, CIE for labs) or attendance values.",
             "Click Save to apply changes.",
             "Changes reflect immediately in report generation.",
         ],
@@ -67,11 +67,11 @@ const steps = [
 const fileFormatNotes = [
     {
         title: "Subject Files (Theory)",
-        columns: "roll_no, student_name, dt_marks, st_marks, at_marks, total_marks, attendance_conducted, attendance_present",
+        columns: "roll_no, student_name, dt_marks, at_marks, aat_marks, total_marks, attendance_conducted, attendance_present",
     },
     {
         title: "Subject Files (Lab)",
-        columns: "roll_no, student_name, lab_marks (or marks), attendance_conducted, attendance_present",
+        columns: "roll_no, student_name, dtde_marks, cie_marks, attendance_conducted, attendance_present",
     },
     {
         title: "Student Info / Backlog File",
@@ -156,7 +156,7 @@ export default function InstructionsPage() {
                     <ul className="space-y-1.5 text-sm">
                         <li>• Column names are case-insensitive and support multiple formats (e.g., &quot;Roll No&quot;, &quot;roll_no&quot;, &quot;rollno&quot;).</li>
                         <li>• &quot;AB&quot; marks are treated as 0 for percentage calculations but displayed as &quot;AB&quot; in reports.</li>
-                        <li>• Lab subjects without marks default to 0 and are still included in percentage calculations.</li>
+                        <li>• Lab subjects use DTDE (15) + CIE (10) = Total (25) marks structure.</li>
                         <li>• HOD remarks are auto-generated based on attendance %, CIE marks %, and backlog count.</li>
                         <li>• Make sure the Student Info file is uploaded for student names, father names, and backlog data.</li>
                     </ul>

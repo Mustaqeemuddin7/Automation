@@ -121,14 +121,14 @@ export default function UploadPage() {
                         <h4 className="font-semibold">Subject Files (Theory)</h4>
                         <p className="text-sm text-muted-foreground">
                             Required columns: roll_no, attendance_conducted,
-                            attendance_present, dt_marks, st_marks, at_marks
+                            attendance_present, dt_marks, at_marks, aat_marks
                         </p>
                     </div>
                     <div>
                         <h4 className="font-semibold">Subject Files (Lab)</h4>
                         <p className="text-sm text-muted-foreground">
-                            Required columns: roll_no, attendance_conducted, attendance_present
-                            (marks columns are optional for labs)
+                            Required columns: roll_no, attendance_conducted, attendance_present,
+                            dtde_marks, cie_marks (marks columns are optional for labs)
                         </p>
                     </div>
                     <div>
