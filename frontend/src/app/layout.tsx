@@ -31,7 +31,7 @@ export default function RootLayout({
         <Header />
         <main className="container mx-auto py-6 px-4 flex-1">{children}</main>
         <footer className="bg-primary text-primary-foreground py-5 text-center text-sm font-semibold tracking-wide">
-          Developed and maintained by Computer Science students.
+          Developed and Maintained by Computer Science Students.
         </footer>
       </body>
     </html>
