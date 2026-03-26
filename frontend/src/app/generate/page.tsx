@@ -403,6 +403,26 @@ export default function GeneratePage() {
                             Successfully generated reports for {result.total_generated} student{(result.total_generated ?? 0) > 1 ? "s" : ""}.
                         </p>
 
+                        {/* Consolidated + ZIP - prominent at top */}
+                        <div className="flex flex-wrap gap-3">
+                            {result.consolidated_filename && (
+                                <Button asChild className="gap-2 h-12" size="lg">
+                                    <a href={reportsApi.download(result.consolidated_filename)} download>
+                                        <Download className="h-5 w-5" />
+                                        Download Consolidated Report
+                                    </a>
+                                </Button>
+                            )}
+                            <Button variant="outline" asChild className="gap-2 h-12" size="lg">
+                                <a href={reportsApi.downloadZip()} download>
+                                    <Package className="h-5 w-5" />
+                                    Download All as ZIP
+                                </a>
+                            </Button>
+                        </div>
+
+                        <Separator />
+
                         {/* Individual reports */}
                         {result.reports && Object.keys(result.reports).length > 0 && (
                             <div className="space-y-3">
@@ -430,26 +450,6 @@ export default function GeneratePage() {
                                 </div>
                             </div>
                         )}
-
-                        <Separator />
-
-                        {/* Consolidated + ZIP */}
-                        <div className="flex flex-wrap gap-3">
-                            {result.consolidated_filename && (
-                                <Button asChild className="gap-2 h-12">
-                                    <a href={reportsApi.download(result.consolidated_filename)} download>
-                                        <Download className="h-5 w-5" />
-                                        Download Consolidated Report
-                                    </a>
-                                </Button>
-                            )}
-                            <Button variant="outline" asChild className="gap-2 h-12">
-                                <a href={reportsApi.downloadZip()} download>
-                                    <Package className="h-5 w-5" />
-                                    Download All as ZIP
-                                </a>
-                            </Button>
-                        </div>
                     </CardContent>
                 </Card>
             )}

@@ -208,12 +208,36 @@ def get_student_complete_data(student_roll, subjects_data, backlog_data=None):
     return student_complete_data
 
 
+def _safe_float(val):
+    """Safely convert a value to float, treating NaN/None/empty as 0."""
+    import math
+    if val is None:
+        return 0.0
+    if isinstance(val, float) and math.isnan(val):
+        return 0.0
+    if isinstance(val, str):
+        val = val.strip()
+        if val == '' or val.lower() == 'ab':
+            return 0.0
+    try:
+        result = float(val)
+        if math.isnan(result):
+            return 0.0
+        return result
+    except (ValueError, TypeError):
+        return 0.0
+
+
 def _format_mark_value(val):
     """Format a mark value for display: AB shows as 'AB', numbers show rounded."""
+    import math
     if isinstance(val, str) and val.strip().lower() == 'ab':
         return 'AB'
     try:
-        return str(round(float(val)))
+        f = float(val)
+        if math.isnan(f):
+            return '0'
+        return str(round(f))
     except (ValueError, TypeError):
         return str(val) if val not in ('', None) else ''
 
@@ -419,12 +443,8 @@ def _add_student_report_content(doc, student_complete_data, department_name, rep
             dtde_is_ab = isinstance(dtde_val, str) and str(dtde_val).strip().lower() == 'ab'
             cie_is_ab = isinstance(cie_val, str) and str(cie_val).strip().lower() == 'ab'
             
-            try:
-                dtde_numeric = 0 if dtde_is_ab else float(dtde_val)
-                cie_numeric = 0 if cie_is_ab else float(cie_val)
-            except (ValueError, TypeError):
-                dtde_numeric = 0
-                cie_numeric = 0
+            dtde_numeric = 0 if dtde_is_ab else _safe_float(dtde_val)
+            cie_numeric = 0 if cie_is_ab else _safe_float(cie_val)
             
             lab_total = dtde_numeric + cie_numeric
             
@@ -477,14 +497,9 @@ def _add_student_report_content(doc, student_complete_data, department_name, rep
             at_is_ab = isinstance(at_val, str) and str(at_val).strip().lower() == 'ab'
             aat_is_ab = isinstance(aat_val, str) and str(aat_val).strip().lower() == 'ab'
             
-            try:
-                dt_numeric = 0 if dt_is_ab else float(dt_val)
-                at_numeric = 0 if at_is_ab else float(at_val)
-                aat_numeric = 0 if aat_is_ab else float(aat_val)
-            except (ValueError, TypeError):
-                dt_numeric = 0
-                at_numeric = 0
-                aat_numeric = 0
+            dt_numeric = 0 if dt_is_ab else _safe_float(dt_val)
+            at_numeric = 0 if at_is_ab else _safe_float(at_val)
+            aat_numeric = 0 if aat_is_ab else _safe_float(aat_val)
             
             dt_marks = 'AB' if dt_is_ab else dt_numeric
             at_marks = 'AB' if at_is_ab else at_numeric

@@ -122,16 +122,24 @@ async def get_student_data(roll_no: str):
         student_data = df_copy[df_copy['roll_no'] == roll_no_str]
         if not student_data.empty:
             row = student_data.iloc[0]
+            import math
+            def safe_int(v, default=0):
+                if v is None: return default
+                try:
+                    f = float(v)
+                    return default if math.isnan(f) else int(f)
+                except (ValueError, TypeError):
+                    return default
             subjects.append({
                 "subject_name": subject_name,
-                "dt_marks": int(row.get('dt_marks', 0) or 0),
-                "aat_marks": int(row.get('aat_marks', 0) or 0),
-                "at_marks": int(row.get('at_marks', 0) or 0),
-                "total_marks": int(row.get('total_marks', 0) or 0),
-                "dtde_marks": int(row.get('dtde_marks', 0) or 0),
-                "cie_marks": int(row.get('cie_marks', 0) or 0),
-                "attendance_conducted": int(row.get('attendance_conducted', 0) or 0),
-                "attendance_present": int(row.get('attendance_present', 0) or 0),
+                "dt_marks": safe_int(row.get('dt_marks', 0)),
+                "aat_marks": safe_int(row.get('aat_marks', 0)),
+                "at_marks": safe_int(row.get('at_marks', 0)),
+                "total_marks": safe_int(row.get('total_marks', 0)),
+                "dtde_marks": safe_int(row.get('dtde_marks', 0)),
+                "cie_marks": safe_int(row.get('cie_marks', 0)),
+                "attendance_conducted": safe_int(row.get('attendance_conducted', 0)),
+                "attendance_present": safe_int(row.get('attendance_present', 0)),
                 "is_lab": bool(row.get('is_lab', False)),
                 "has_original_lab_marks": bool(row.get('has_original_lab_marks', False))
             })

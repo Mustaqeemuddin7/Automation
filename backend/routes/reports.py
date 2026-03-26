@@ -137,7 +137,9 @@ async def generate_reports(config: ReportConfig):
         consolidated_filename = f"Consolidated_Progress_Report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
         generated_reports[consolidated_filename] = consolidated_buffer.getvalue()
     except Exception as e:
+        import traceback
         print(f"Error generating consolidated report: {str(e)}")
+        traceback.print_exc()
     
     return {
         "success": True,
